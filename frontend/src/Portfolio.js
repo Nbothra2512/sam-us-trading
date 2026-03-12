@@ -1,24 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Portfolio.css';
 
 const API_URL = 'http://localhost:8000/api';
+const WS_PRICES_URL = 'ws://localhost:8000/ws/prices';
 
 function Portfolio({ refreshKey, onPortfolioChange }) {
   const [portfolio, setPortfolio] = useState(null);
   const [prevPrices, setPrevPrices] = useState({});
+  const [livePrices, setLivePrices] = useState({});    // Real-time streamed prices
   const [flashing, setFlashing] = useState({});
   const [showExtended, setShowExtended] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newSymbol, setNewSymbol] = useState('');
   const [newQty, setNewQty] = useState('');
   const [newPrice, setNewPrice] = useState('');
+  const [feedStatus, setFeedStatus] = useState('connecting');
+  const priceWsRef = useRef(null);
   const refreshInterval = useRef(null);
+  const flashTimerRef = useRef(null);
 
-  const fetchPortfolio = () => {
+  // Fetch full portfolio data (REST — for initial load and P&L calculations)
+  const fetchPortfolio = useCallback(() => {
     fetch(`${API_URL}/portfolio`)
       .then(r => r.json())
       .then(data => {
-        // Price flash: detect changes
+        // Price flash on REST refresh
         if (portfolio && portfolio.holdings) {
           const flashes = {};
           data.holdings.forEach(h => {
@@ -27,8 +33,11 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
               flashes[h.symbol] = h.last > prev ? 'flash-green' : 'flash-red';
             }
           });
-          setFlashing(flashes);
-          setTimeout(() => setFlashing({}), 500);
+          if (Object.keys(flashes).length > 0) {
+            setFlashing(flashes);
+            if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+            flashTimerRef.current = setTimeout(() => setFlashing({}), 500);
+          }
         }
         const prices = {};
         data.holdings.forEach(h => { prices[h.symbol] = h.last; });
@@ -36,12 +45,86 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
         setPortfolio(data);
       })
       .catch(() => {});
-  };
+  }, [portfolio, prevPrices]);
 
-  // Refresh on mount + every 15s
+  // ─── Real-time price WebSocket ─────────────────────────────────
+  useEffect(() => {
+    let reconnectTimer;
+
+    const connectPriceWs = () => {
+      const ws = new WebSocket(WS_PRICES_URL);
+
+      ws.onopen = () => {
+        setFeedStatus('live');
+        // Subscribe to all portfolio symbols
+        if (portfolio && portfolio.holdings) {
+          const symbols = portfolio.holdings.map(h => h.symbol);
+          if (symbols.length > 0) {
+            ws.send(JSON.stringify({ type: 'subscribe', symbols }));
+          }
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'price_update' && data.prices) {
+            setLivePrices(prev => {
+              const updated = { ...prev };
+              const flashes = {};
+              for (const [symbol, info] of Object.entries(data.prices)) {
+                const oldPrice = prev[symbol]?.price || prevPrices[symbol];
+                if (oldPrice !== undefined && info.price !== oldPrice) {
+                  flashes[symbol] = info.price > oldPrice ? 'flash-green' : 'flash-red';
+                }
+                updated[symbol] = info;
+              }
+              if (Object.keys(flashes).length > 0) {
+                setFlashing(f => ({ ...f, ...flashes }));
+                if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+                flashTimerRef.current = setTimeout(() => setFlashing({}), 500);
+              }
+              return updated;
+            });
+          }
+        } catch (e) { /* ignore parse errors */ }
+      };
+
+      ws.onclose = () => {
+        setFeedStatus('reconnecting');
+        reconnectTimer = setTimeout(connectPriceWs, 2000);
+      };
+
+      ws.onerror = () => {
+        setFeedStatus('error');
+        ws.close();
+      };
+
+      priceWsRef.current = ws;
+    };
+
+    connectPriceWs();
+
+    return () => {
+      clearTimeout(reconnectTimer);
+      if (priceWsRef.current) priceWsRef.current.close();
+    };
+  }, []); // Connect once on mount
+
+  // Re-subscribe when portfolio changes
+  useEffect(() => {
+    if (priceWsRef.current && priceWsRef.current.readyState === WebSocket.OPEN && portfolio?.holdings) {
+      const symbols = portfolio.holdings.map(h => h.symbol);
+      if (symbols.length > 0) {
+        priceWsRef.current.send(JSON.stringify({ type: 'subscribe', symbols }));
+      }
+    }
+  }, [portfolio?.holdings?.length]);
+
+  // REST refresh on mount + every 30s (fallback — main updates come via WebSocket)
   useEffect(() => {
     fetchPortfolio();
-    refreshInterval.current = setInterval(fetchPortfolio, 15000);
+    refreshInterval.current = setInterval(fetchPortfolio, 30000);
     return () => clearInterval(refreshInterval.current);
   }, []);
 
@@ -76,7 +159,6 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
         setNewQty('');
         setNewPrice('');
         fetchPortfolio();
-        // Notify parent so SAM chat knows too
         if (onPortfolioChange) onPortfolioChange();
       })
       .catch(() => {});
@@ -93,6 +175,35 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
         if (onPortfolioChange) onPortfolioChange();
       })
       .catch(() => {});
+  };
+
+  // ─── Merge live streamed prices with REST data ─────────────────
+  const getDisplayPrice = (holding) => {
+    const liveData = livePrices[holding.symbol];
+    if (liveData && liveData.price) {
+      // Recalculate P&L with live price
+      const last = liveData.price;
+      const market_value = Math.round(last * holding.qty * 100) / 100;
+      const pl = Math.round((last - holding.buy_price) * holding.qty * 100) / 100;
+      const pl_pct = holding.buy_price ? Math.round(((last - holding.buy_price) / holding.buy_price) * 10000) / 100 : 0;
+      const day_chg = holding.prev_close ? Math.round((last - holding.prev_close) * 100) / 100 : holding.day_chg;
+      const day_chg_pct = holding.prev_close ? Math.round(((last - holding.prev_close) / holding.prev_close) * 10000) / 100 : holding.day_chg_pct;
+
+      // Estimate bid/ask from live price
+      const spread_half = Math.max(Math.round(last * 0.0001 * 100) / 100, 0.01);
+      const bid = Math.round((last - spread_half) * 100) / 100;
+      const ask = Math.round((last + spread_half) * 100) / 100;
+      const mid = Math.round((bid + ask) / 2 * 100) / 100;
+
+      return {
+        ...holding,
+        last, bid, ask, mid,
+        market_value, pl, pl_pct,
+        day_chg, day_chg_pct,
+        prev_close: holding.prev_close,
+      };
+    }
+    return holding;
   };
 
   const fmt = (n, decimals = 2) => {
@@ -117,6 +228,15 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
     return Math.min(spreadPct / 0.5 * 100, 100);
   };
 
+  // Compute display holdings with live prices merged
+  const displayHoldings = portfolio?.holdings?.map(getDisplayPrice) || [];
+
+  // Recompute totals from live data
+  const totalValue = displayHoldings.reduce((sum, h) => sum + (h.market_value || 0), 0);
+  const totalCost = displayHoldings.reduce((sum, h) => sum + (h.cost_basis || 0), 0);
+  const totalPl = Math.round((totalValue - totalCost) * 100) / 100;
+  const totalPlPct = totalCost ? Math.round(((totalValue - totalCost) / totalCost) * 10000) / 100 : 0;
+
   const session = portfolio?.session || 'CLOSED';
   const sessionClass = {
     'OPEN': 'session-open',
@@ -124,6 +244,13 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
     'AFTER-HOURS': 'session-ah',
     'CLOSED': 'session-closed',
   }[session] || 'session-closed';
+
+  const feedStatusClass = {
+    'live': 'feed-live',
+    'connecting': 'feed-connecting',
+    'reconnecting': 'feed-connecting',
+    'error': 'feed-error',
+  }[feedStatus] || 'feed-connecting';
 
   return (
     <div className="terminal">
@@ -134,6 +261,9 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
           <span className="terminal-subtitle">Live Portfolio Tracker</span>
         </div>
         <div className="terminal-controls">
+          <span className={`feed-badge ${feedStatusClass}`} title={`Data feed: ${feedStatus}`}>
+            {feedStatus === 'live' ? 'LIVE FEED' : feedStatus === 'connecting' ? 'CONNECTING...' : feedStatus === 'reconnecting' ? 'RECONNECTING...' : 'FEED ERROR'}
+          </span>
           <span className={`session-badge ${sessionClass}`}>{session}</span>
           <button
             className={`ext-toggle ${showExtended ? 'active' : ''}`}
@@ -145,37 +275,37 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
         </div>
       </div>
 
-      {/* Summary Bar: Total Portfolio Value, Total Cost, Unrealized P&L, Return %, Position Count */}
-      {portfolio && portfolio.position_count > 0 && (
+      {/* Summary Bar */}
+      {portfolio && displayHoldings.length > 0 && (
         <div className="summary-bar">
           <div className="summary-item">
             <span className="summary-label">Total Portfolio Value</span>
-            <span className="summary-value">${fmt(portfolio.total_value)}</span>
+            <span className="summary-value">${fmt(totalValue)}</span>
           </div>
           <div className="summary-item">
             <span className="summary-label">Total Cost</span>
-            <span className="summary-value">${fmt(portfolio.total_cost)}</span>
+            <span className="summary-value">${fmt(totalCost)}</span>
           </div>
           <div className="summary-item">
             <span className="summary-label">Unrealized P&L</span>
-            <span className={`summary-value ${portfolio.total_pl >= 0 ? 'green' : 'red'}`}>
-              {fmtDollarSign(portfolio.total_pl)}
+            <span className={`summary-value ${totalPl >= 0 ? 'green' : 'red'}`}>
+              {fmtDollarSign(totalPl)}
             </span>
           </div>
           <div className="summary-item">
             <span className="summary-label">Return %</span>
-            <span className={`summary-value ${portfolio.total_pl_pct >= 0 ? 'green' : 'red'}`}>
-              {fmtPctSign(portfolio.total_pl_pct)}
+            <span className={`summary-value ${totalPlPct >= 0 ? 'green' : 'red'}`}>
+              {fmtPctSign(totalPlPct)}
             </span>
           </div>
           <div className="summary-item">
             <span className="summary-label">Positions</span>
-            <span className="summary-value">{portfolio.position_count}</span>
+            <span className="summary-value">{displayHoldings.length}</span>
           </div>
         </div>
       )}
 
-      {/* Main Table: 5 Column Groups · 17 Data Points Per Position */}
+      {/* Main Table */}
       <div className="table-wrap">
         <table className="equity-table">
           <thead>
@@ -213,11 +343,10 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
             </tr>
           </thead>
           <tbody>
-            {portfolio && portfolio.holdings && portfolio.holdings.length > 0 ? (
+            {displayHoldings.length > 0 ? (
               <>
-                {portfolio.holdings.map(h => (
+                {displayHoldings.map(h => (
                   <tr key={h.symbol}>
-                    {/* POSITION: Symbol, Qty, Buy Price, Cost Basis */}
                     <td className="symbol-cell">
                       <div className="symbol-name">{h.symbol}</div>
                       <div className="company-name">{h.name}</div>
@@ -225,8 +354,6 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
                     <td>{h.qty}</td>
                     <td>${fmt(h.buy_price)}</td>
                     <td>${fmt(h.cost_basis)}</td>
-
-                    {/* LIVE QUOTE: Last, Bid (orange), Ask (green), Mid + spread bar */}
                     <td className={`last-cell ${flashing[h.symbol] || ''}`}>${fmt(h.last)}</td>
                     <td className="bid-cell">${fmt(h.bid)}</td>
                     <td className="ask-cell">${fmt(h.ask)}</td>
@@ -236,16 +363,12 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
                         <div className="spread-bar" style={{ width: `${spreadBarWidth(h.spread_pct)}%` }}></div>
                       </div>
                     </td>
-
-                    {/* DAY: CHG $, CHG % */}
                     <td className={h.day_chg >= 0 ? 'green' : 'red'}>
                       {h.day_chg >= 0 ? '+$' : '-$'}{fmt(Math.abs(h.day_chg))}
                     </td>
                     <td className={h.day_chg_pct >= 0 ? 'green' : 'red'}>
                       {fmtPctSign(h.day_chg_pct)}
                     </td>
-
-                    {/* EXTENDED HOURS: Pre $, Pre %, AH $, AH % */}
                     {showExtended && (
                       <>
                         <td>{h.pre_price != null ? `$${fmt(h.pre_price)}` : '\u2014'}</td>
@@ -258,8 +381,6 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
                         </td>
                       </>
                     )}
-
-                    {/* P&L: Mkt Value, P&L $, P&L % */}
                     <td className="bold">${fmt(h.market_value)}</td>
                     <td className={`bold ${h.pl >= 0 ? 'green' : 'red'}`}>{fmtDollarSign(h.pl)}</td>
                     <td className={`bold ${h.pl_pct >= 0 ? 'green' : 'red'}`}>{fmtPctSign(h.pl_pct)}</td>
@@ -271,11 +392,11 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
                 {/* TOTALS row */}
                 <tr className="totals-row">
                   <td colSpan={showExtended ? 14 : 10} className="totals-label">
-                    TOTALS &middot; {portfolio.position_count} POSITIONS &middot; Portfolio Summary
+                    TOTALS &middot; {displayHoldings.length} POSITIONS &middot; Portfolio Summary
                   </td>
-                  <td className="bold">${fmt(portfolio.total_value)}</td>
-                  <td className={`bold ${portfolio.total_pl >= 0 ? 'green' : 'red'}`}>{fmtDollarSign(portfolio.total_pl)}</td>
-                  <td className={`bold ${portfolio.total_pl_pct >= 0 ? 'green' : 'red'}`}>{fmtPctSign(portfolio.total_pl_pct)}</td>
+                  <td className="bold">${fmt(totalValue)}</td>
+                  <td className={`bold ${totalPl >= 0 ? 'green' : 'red'}`}>{fmtDollarSign(totalPl)}</td>
+                  <td className={`bold ${totalPlPct >= 0 ? 'green' : 'red'}`}>{fmtPctSign(totalPlPct)}</td>
                   <td></td>
                 </tr>
               </>

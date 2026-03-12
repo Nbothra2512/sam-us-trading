@@ -33,7 +33,8 @@ function App() {
 
   useEffect(() => {
     fetchPortfolio();
-    const interval = setInterval(fetchPortfolio, 15000);
+    // REST polling is now fallback only — live prices come via WebSocket
+    const interval = setInterval(fetchPortfolio, 30000);
     return () => clearInterval(interval);
   }, [fetchPortfolio]);
 

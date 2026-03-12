@@ -51,6 +51,37 @@
 .session-ah { background: rgba(168,85,247,0.15); color: #a855f7; }
 .session-closed { background: rgba(100,116,139,0.15); color: #64748b; }
 
+/* Live Feed Status Badge */
+.feed-badge {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.feed-live {
+  background: rgba(239,68,68,0.2);
+  color: #ef4444;
+  animation: feed-pulse 2s ease-in-out infinite;
+}
+
+.feed-connecting {
+  background: rgba(234,179,8,0.15);
+  color: #eab308;
+}
+
+.feed-error {
+  background: rgba(100,116,139,0.15);
+  color: #64748b;
+}
+
+@keyframes feed-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .ext-toggle {
   background: #151c2c;
   border: 1px solid #1e293b;

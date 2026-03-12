@@ -1,6 +1,7 @@
-"""FastAPI server — WebSocket chat + REST endpoints."""
+"""FastAPI server — WebSocket chat + REST endpoints + real-time price streaming."""
 import json
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,11 +9,27 @@ from pydantic import BaseModel
 import agent
 import market_data
 import portfolio
+import live_feed
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="AI Market Agent")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start live price feed on server startup, stop on shutdown."""
+    await live_feed.start()
+    # Auto-subscribe to all portfolio + watchlist symbols
+    data = portfolio._load()
+    symbols = [h["symbol"] for h in data.get("holdings", [])] + data.get("watchlist", [])
+    if symbols:
+        await live_feed.sync_subscriptions(symbols)
+        logger.info(f"Auto-subscribed to {len(symbols)} symbols: {symbols}")
+    yield
+    await live_feed.stop()
+
+
+app = FastAPI(title="AI Market Agent", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -129,23 +146,58 @@ class RemoveHoldingRequest(BaseModel):
 
 
 @app.post("/api/portfolio/add")
-def add_holding(req: AddHoldingRequest):
+async def add_holding(req: AddHoldingRequest):
     try:
-        return portfolio.add_holding(req.symbol.upper(), req.qty, req.avg_price)
+        result = portfolio.add_holding(req.symbol.upper(), req.qty, req.avg_price)
+        # Auto-subscribe to live feed for new symbol
+        await live_feed.subscribe(req.symbol.upper())
+        return result
     except Exception as e:
         logger.error(f"Add holding error: {e}")
         return JSONResponse(status_code=500, content={"error": f"Failed to add {req.symbol}"})
 
 
 @app.post("/api/portfolio/remove")
-def remove_holding(req: RemoveHoldingRequest):
+async def remove_holding(req: RemoveHoldingRequest):
     try:
-        return portfolio.remove_holding(req.symbol.upper())
+        result = portfolio.remove_holding(req.symbol.upper())
+        # Unsubscribe if not in watchlist
+        data = portfolio._load()
+        if req.symbol.upper() not in data.get("watchlist", []):
+            await live_feed.unsubscribe(req.symbol.upper())
+        return result
     except Exception as e:
         logger.error(f"Remove holding error: {e}")
         return JSONResponse(status_code=500, content={"error": f"Failed to remove {req.symbol}"})
 
 
+# ─── Real-time price streaming WebSocket ───────────────────────────
+@app.websocket("/ws/prices")
+async def websocket_prices(websocket: WebSocket):
+    """Stream real-time price updates to frontend dashboard."""
+    await websocket.accept()
+    live_feed.register_client(websocket)
+
+    try:
+        while True:
+            # Listen for subscription commands from frontend
+            data = await websocket.receive_text()
+            msg = json.loads(data)
+            if msg.get("type") == "subscribe":
+                symbols = msg.get("symbols", [])
+                for s in symbols:
+                    await live_feed.subscribe(s)
+            elif msg.get("type") == "unsubscribe":
+                symbols = msg.get("symbols", [])
+                for s in symbols:
+                    await live_feed.unsubscribe(s)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        live_feed.unregister_client(websocket)
+
+
+# ─── SAM Chat WebSocket ────────────────────────────────────────────
 @app.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket):
     await websocket.accept()
@@ -166,6 +218,10 @@ async def websocket_chat(websocket: WebSocket):
                     "type": "message",
                     "content": response,
                 }))
+                # After SAM responds, sync subscriptions in case portfolio changed
+                pdata = portfolio._load()
+                symbols = [h["symbol"] for h in pdata.get("holdings", [])] + pdata.get("watchlist", [])
+                await live_feed.sync_subscriptions(symbols)
             except Exception as e:
                 await websocket.send_text(json.dumps({
                     "type": "error",
