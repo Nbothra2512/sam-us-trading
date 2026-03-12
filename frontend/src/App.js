@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import Portfolio from './Portfolio';
 import './App.css';
 
 const WS_URL = 'ws://localhost:8000/ws/chat';
@@ -13,11 +14,28 @@ function App() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [portfolio, setPortfolio] = useState(null);
-  const [watchlist, setWatchlist] = useState([]);
+  const [portfolioData, setPortfolioData] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const wsRef = useRef(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Shared portfolio fetch — used by both terminal and chat
+  const fetchPortfolio = useCallback(() => {
+    fetch(`${API_URL}/portfolio`).then(r => r.json()).then(setPortfolioData).catch(() => {});
+  }, []);
+
+  // Trigger terminal refresh from outside
+  const triggerRefresh = useCallback(() => {
+    setRefreshKey(k => k + 1);
+    fetchPortfolio();
+  }, [fetchPortfolio]);
+
+  useEffect(() => {
+    fetchPortfolio();
+    const interval = setInterval(fetchPortfolio, 15000);
+    return () => clearInterval(interval);
+  }, [fetchPortfolio]);
 
   useEffect(() => {
     const connect = () => {
@@ -33,7 +51,8 @@ function App() {
           setIsTyping(data.status);
         } else if (data.type === 'message') {
           setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
-          refreshSidebar();
+          // Refresh portfolio after every SAM response (might have added/removed holdings)
+          triggerRefresh();
         } else if (data.type === 'error') {
           setMessages(prev => [...prev, { role: 'error', content: data.content }]);
         }
@@ -42,9 +61,8 @@ function App() {
     };
     connect();
     return () => wsRef.current?.close();
-  }, []);
+  }, [triggerRefresh]);
 
-  // Save chat to localStorage
   useEffect(() => {
     localStorage.setItem('sam_chat', JSON.stringify(messages));
   }, [messages]);
@@ -52,17 +70,6 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
-
-  const refreshSidebar = () => {
-    fetch(`${API_URL}/portfolio`).then(r => r.json()).then(setPortfolio).catch(() => {});
-    fetch(`${API_URL}/watchlist`).then(r => r.json()).then(setWatchlist).catch(() => {});
-  };
-
-  useEffect(() => {
-    refreshSidebar();
-    const interval = setInterval(refreshSidebar, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   const sendMessage = () => {
     if (!input.trim() || !connected) return;
@@ -81,95 +88,39 @@ function App() {
   };
 
   return (
-    <div className="app">
-      {/* Sidebar */}
-      <div className="sidebar">
-        <h2>SAM</h2>
-        <div className="sidebar-row">
-          <div className="status-badge" data-connected={connected}>
-            {connected ? 'Live' : 'Disconnected'}
-          </div>
-          {messages.length > 0 && (
-            <button className="clear-btn" onClick={() => { setMessages([]); localStorage.removeItem('sam_chat'); }}>
-              Clear Chat
-            </button>
-          )}
-        </div>
-
-        {/* Portfolio */}
-        {portfolio && portfolio.holdings && portfolio.holdings.length > 0 && (
-          <div className="card">
-            <h3>Portfolio</h3>
-            <div className="stat total">
-              <span>Total Value</span>
-              <span className="value">${portfolio.total_value.toLocaleString()}</span>
-            </div>
-            <div className="stat">
-              <span>Total P&L</span>
-              <span className={`value ${portfolio.total_pl >= 0 ? 'green' : 'red'}`}>
-                {portfolio.total_pl >= 0 ? '+' : ''}${portfolio.total_pl.toLocaleString()} ({portfolio.total_pl_pct}%)
-              </span>
-            </div>
-            <div className="divider"></div>
-            {portfolio.holdings.map(h => (
-              <div key={h.symbol} className="position">
-                <div className="position-header">
-                  <span className="symbol">{h.symbol}</span>
-                  <span className={h.pl >= 0 ? 'green' : 'red'}>
-                    {h.pl >= 0 ? '+' : ''}{h.pl_pct.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="position-detail">
-                  {h.qty} @ ${h.avg_price} | Now ${h.current_price.toFixed(2)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Watchlist */}
-        {watchlist.length > 0 && (
-          <div className="card">
-            <h3>Watchlist</h3>
-            {watchlist.map(w => (
-              <div key={w.symbol} className="watchlist-item">
-                <span className="symbol">{w.symbol}</span>
-                <span className="value">${w.mid.toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Quick commands */}
-        <div className="quick-actions">
-          <h3>Quick Commands</h3>
-          {[
-            'Price of NVDA',
-            'TSLA news sentiment',
-            'Analyze AAPL technicals',
-            'Show my portfolio',
-            'Add MSFT to watchlist',
-          ].map(cmd => (
-            <button key={cmd} onClick={() => { setInput(cmd); inputRef.current?.focus(); }}>
-              {cmd}
-            </button>
-          ))}
-        </div>
+    <div className="split-layout">
+      {/* Top — uEquity Portfolio Terminal */}
+      <div className="split-top">
+        <Portfolio refreshKey={refreshKey} onPortfolioChange={triggerRefresh} />
       </div>
 
-      {/* Chat */}
-      <div className="chat">
-        <div className="messages">
+      <div className="split-divider"></div>
+
+      {/* Bottom — SAM Chat */}
+      <div className="split-bottom">
+        <div className="chat-header">
+          <div className="chat-brand">SAM <span>Smart Analyst for Markets</span></div>
+          <div className="chat-controls">
+            <span className={`status-dot ${connected ? 'live' : 'off'}`}></span>
+            <span className="status-text">{connected ? 'Live' : 'Offline'}</span>
+            {messages.length > 0 && (
+              <button className="clear-btn" onClick={() => { setMessages([]); localStorage.removeItem('sam_chat'); }}>
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="chat-messages">
           {messages.length === 0 && (
-            <div className="welcome">
-              <h1>SAM</h1>
-              <p className="subtitle">Smart Analyst for Markets</p>
-              <p>Live prices, news sentiment, technical analysis, and portfolio tracking for the US stock market.</p>
-              <div className="examples">
+            <div className="chat-welcome">
+              <span className="welcome-text">Ask SAM anything about the US stock market — prices, news, analysis, or manage your portfolio</span>
+              <div className="welcome-chips">
                 <button onClick={() => setInput("What's NVDA trading at?")}>NVDA Price</button>
                 <button onClick={() => setInput('News sentiment on TSLA')}>TSLA Sentiment</button>
-                <button onClick={() => setInput('Run technical analysis on AAPL')}>Analyze AAPL</button>
-                <button onClick={() => setInput('Add 50 shares of MSFT at $420 to my portfolio')}>Track Portfolio</button>
+                <button onClick={() => setInput('Analyze AAPL technicals')}>Analyze AAPL</button>
+                <button onClick={() => setInput('Add 10 shares of AAPL at $180 to my portfolio')}>Add AAPL</button>
+                <button onClick={() => setInput('Show my portfolio')}>My Portfolio</button>
               </div>
             </div>
           )}
@@ -196,18 +147,16 @@ function App() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="input-area">
+        <div className="chat-input">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about prices, news, or track your portfolio..."
+            placeholder="Ask SAM about prices, news, technicals, or manage your portfolio..."
             rows={1}
           />
-          <button onClick={sendMessage} disabled={!connected || !input.trim()}>
-            Send
-          </button>
+          <button onClick={sendMessage} disabled={!connected || !input.trim()}>Send</button>
         </div>
       </div>
     </div>

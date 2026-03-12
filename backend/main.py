@@ -1,10 +1,16 @@
 """FastAPI server — WebSocket chat + REST endpoints."""
 import json
+import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 import agent
 import market_data
 import portfolio
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Market Agent")
 
@@ -24,32 +30,84 @@ def health():
 
 @app.get("/api/quote/{symbol}")
 def quote(symbol: str):
-    return market_data.get_live_quote(symbol.upper())
+    try:
+        return market_data.get_live_quote(symbol.upper())
+    except Exception as e:
+        logger.error(f"Quote error for {symbol}: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to fetch quote for {symbol}"})
 
 
 @app.get("/api/analysis/{symbol}")
 def analysis(symbol: str):
-    return market_data.get_technical_analysis(symbol.upper())
+    try:
+        return market_data.get_technical_analysis(symbol.upper())
+    except Exception as e:
+        logger.error(f"Analysis error for {symbol}: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to fetch analysis for {symbol}"})
 
 
 @app.get("/api/news")
 def news(symbol: str = None, limit: int = 10):
-    return market_data.get_news(symbol=symbol.upper() if symbol else None, limit=limit)
+    try:
+        return market_data.get_news(symbol=symbol.upper() if symbol else None, limit=limit)
+    except Exception as e:
+        logger.error(f"News error: {e}")
+        return JSONResponse(status_code=500, content={"error": "Failed to fetch news"})
 
 
 @app.get("/api/sentiment/{symbol}")
 def sentiment(symbol: str):
-    return market_data.get_news_sentiment(symbol.upper())
+    try:
+        return market_data.get_news_sentiment(symbol.upper())
+    except Exception as e:
+        logger.error(f"Sentiment error for {symbol}: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to fetch sentiment for {symbol}"})
 
 
 @app.get("/api/portfolio")
 def get_portfolio():
-    return portfolio.get_portfolio()
+    try:
+        return portfolio.get_portfolio()
+    except Exception as e:
+        logger.error(f"Portfolio error: {e}")
+        return JSONResponse(status_code=500, content={"error": "Failed to fetch portfolio"})
 
 
 @app.get("/api/watchlist")
 def get_watchlist():
-    return portfolio.get_watchlist()
+    try:
+        return portfolio.get_watchlist()
+    except Exception as e:
+        logger.error(f"Watchlist error: {e}")
+        return JSONResponse(status_code=500, content={"error": "Failed to fetch watchlist"})
+
+
+class AddHoldingRequest(BaseModel):
+    symbol: str
+    qty: float
+    avg_price: float
+
+
+class RemoveHoldingRequest(BaseModel):
+    symbol: str
+
+
+@app.post("/api/portfolio/add")
+def add_holding(req: AddHoldingRequest):
+    try:
+        return portfolio.add_holding(req.symbol.upper(), req.qty, req.avg_price)
+    except Exception as e:
+        logger.error(f"Add holding error: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to add {req.symbol}"})
+
+
+@app.post("/api/portfolio/remove")
+def remove_holding(req: RemoveHoldingRequest):
+    try:
+        return portfolio.remove_holding(req.symbol.upper())
+    except Exception as e:
+        logger.error(f"Remove holding error: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to remove {req.symbol}"})
 
 
 @app.websocket("/ws/chat")

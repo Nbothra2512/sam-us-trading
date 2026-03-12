@@ -84,11 +84,11 @@ Portfolio and watchlist are stored in `data/portfolio.json`:
 }
 ```
 
-This file persists across restarts. Live prices are fetched on every portfolio/watchlist view to calculate real-time P&L.
+This file persists across container restarts via Docker volume mount (`./data:/app/data`). Chat history is persisted in the browser via localStorage. Live prices are fetched on every portfolio/watchlist view to calculate real-time P&L.
 
 ## API Endpoints (REST)
 
-These are available for direct access outside the chat:
+All endpoints return JSON error responses with status 500 on failure instead of crashing.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -97,7 +97,9 @@ These are available for direct access outside the chat:
 | `/api/analysis/{symbol}` | GET | Technical analysis |
 | `/api/news?symbol=X&limit=N` | GET | News articles |
 | `/api/sentiment/{symbol}` | GET | News sentiment |
-| `/api/portfolio` | GET | Portfolio with live P&L |
+| `/api/portfolio` | GET | Portfolio with live P&L (uEquity 17 data points) |
+| `/api/portfolio/add` | POST | Add holding `{symbol, qty, avg_price}` |
+| `/api/portfolio/remove` | POST | Remove holding `{symbol}` |
 | `/api/watchlist` | GET | Watchlist with prices |
 | `/ws/chat` | WebSocket | Chat with SAM |
 
@@ -113,7 +115,7 @@ These are available for direct access outside the chat:
 
 5. **No trading execution** — SAM is deliberately read-only. This eliminates risk of accidental trades and keeps the scope focused on analysis.
 
-6. **Docker Compose** — Single command startup. Backend and frontend are isolated containers with their own dependencies.
+6. **Docker Compose** — Single command startup. Backend has healthcheck; frontend waits for backend to be healthy. Data persists via volume mount.
 
 ## Extending SAM
 
