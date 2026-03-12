@@ -172,3 +172,132 @@ def get_news_sentiment(symbol: str) -> dict:
     except Exception as e:
         logger.error(f"get_news_sentiment({symbol}): {e}")
         return {"symbol": symbol, "overall_sentiment": "unknown", "error": str(e)}
+
+
+def get_earnings_calendar(from_date: str = None, to_date: str = None) -> dict:
+    """Get upcoming and recent earnings announcements."""
+    try:
+        if not from_date:
+            from_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        if not to_date:
+            to_date = (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d")
+        data = fc.earnings_calendar(_from=from_date, to=to_date, symbol="", international=False)
+        earnings = data.get("earningsCalendar", [])
+        results = []
+        for e in earnings[:50]:
+            results.append({
+                "symbol": e.get("symbol", ""),
+                "date": e.get("date", ""),
+                "hour": e.get("hour", ""),  # bmo=before market open, amc=after market close
+                "eps_estimate": e.get("epsEstimate"),
+                "eps_actual": e.get("epsActual"),
+                "revenue_estimate": e.get("revenueEstimate"),
+                "revenue_actual": e.get("revenueActual"),
+                "quarter": e.get("quarter"),
+                "year": e.get("year"),
+            })
+        return {"from": from_date, "to": to_date, "count": len(results), "earnings": results}
+    except Exception as e:
+        logger.error(f"get_earnings_calendar: {e}")
+        return {"error": str(e), "earnings": []}
+
+
+def get_earnings_surprises(symbol: str) -> dict:
+    """Get historical earnings surprises — actual vs estimate for last 4 quarters."""
+    try:
+        data = fc.company_earnings(symbol, limit=4)
+        results = []
+        for e in data:
+            eps_actual = e.get("actual")
+            eps_estimate = e.get("estimate")
+            surprise = e.get("surprise")
+            surprise_pct = e.get("surprisePercent")
+            results.append({
+                "period": e.get("period", ""),
+                "quarter": e.get("quarter"),
+                "year": e.get("year"),
+                "eps_actual": eps_actual,
+                "eps_estimate": eps_estimate,
+                "surprise": surprise,
+                "surprise_pct": surprise_pct,
+                "beat": eps_actual > eps_estimate if eps_actual is not None and eps_estimate is not None else None,
+            })
+
+        # Calculate beat rate
+        beats = sum(1 for r in results if r.get("beat") is True)
+        total = sum(1 for r in results if r.get("beat") is not None)
+        beat_rate = round((beats / total) * 100, 0) if total > 0 else None
+
+        return {
+            "symbol": symbol,
+            "beat_rate_pct": beat_rate,
+            "quarters": results,
+        }
+    except Exception as e:
+        logger.error(f"get_earnings_surprises({symbol}): {e}")
+        return {"symbol": symbol, "error": str(e)}
+
+
+def get_recommendation_trends(symbol: str) -> dict:
+    """Get analyst recommendation trends — buy/hold/sell consensus."""
+    try:
+        data = fc.recommendation_trends(symbol)
+        if not data:
+            return {"symbol": symbol, "error": "No recommendation data"}
+        latest = data[0] if data else {}
+        total = (latest.get("buy", 0) + latest.get("hold", 0) + latest.get("sell", 0) +
+                 latest.get("strongBuy", 0) + latest.get("strongSell", 0))
+        return {
+            "symbol": symbol,
+            "period": latest.get("period", ""),
+            "strong_buy": latest.get("strongBuy", 0),
+            "buy": latest.get("buy", 0),
+            "hold": latest.get("hold", 0),
+            "sell": latest.get("sell", 0),
+            "strong_sell": latest.get("strongSell", 0),
+            "total_analysts": total,
+            "consensus": _calc_consensus(latest),
+        }
+    except Exception as e:
+        logger.error(f"get_recommendation_trends({symbol}): {e}")
+        return {"symbol": symbol, "error": str(e)}
+
+
+def _calc_consensus(rec: dict) -> str:
+    """Calculate consensus from recommendation data."""
+    sb = rec.get("strongBuy", 0)
+    b = rec.get("buy", 0)
+    h = rec.get("hold", 0)
+    s = rec.get("sell", 0)
+    ss = rec.get("strongSell", 0)
+    total = sb + b + h + s + ss
+    if total == 0:
+        return "unknown"
+    score = (sb * 5 + b * 4 + h * 3 + s * 2 + ss * 1) / total
+    if score >= 4.0:
+        return "Strong Buy"
+    elif score >= 3.5:
+        return "Buy"
+    elif score >= 2.5:
+        return "Hold"
+    elif score >= 2.0:
+        return "Sell"
+    else:
+        return "Strong Sell"
+
+
+def get_price_target(symbol: str) -> dict:
+    """Get analyst price target consensus."""
+    try:
+        data = fc.price_target(symbol)
+        return {
+            "symbol": symbol,
+            "target_high": data.get("targetHigh"),
+            "target_low": data.get("targetLow"),
+            "target_mean": data.get("targetMean"),
+            "target_median": data.get("targetMedian"),
+            "last_updated": data.get("lastUpdated", ""),
+        }
+    except Exception as e:
+        logger.error(f"get_price_target({symbol}): {e}")
+        return {"symbol": symbol, "error": str(e)}

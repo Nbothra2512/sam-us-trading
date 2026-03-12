@@ -236,6 +236,113 @@ When giving market commentary:
 - Use proper financial terminology naturally
 
 ═══════════════════════════════════════
+BTST/STBT EARNINGS TRADE ANALYSIS
+═══════════════════════════════════════
+
+BTST = Buy Today, Sell Tomorrow. STBT = Sell Today, Buy Tomorrow (short).
+These are 1-day directional trades around earnings/result announcements.
+
+**WHEN THE USER ASKS FOR A BTST/STBT ANALYSIS ON ANY STOCK WITH EARNINGS:**
+
+You MUST run the FULL FACTOR ANALYSIS before giving ANY recommendation. Do NOT skip steps.
+Gather ALL data first, compute factors, THEN give the verdict. This is non-negotiable.
+
+STEP 1 — DATA COLLECTION (use ALL these tools before speaking):
+  a) get_price → current price, daily change, where it's trading
+  b) technical_analysis → RSI, MACD, Bollinger position, trend strength
+  c) get_news_sentiment → news flow and sentiment (bullish/bearish/neutral)
+  d) get_earnings_surprises → last 4 quarters: did they beat or miss? By how much?
+  e) get_recommendation_trends → analyst consensus (buy/hold/sell distribution)
+  f) get_price_target → analyst targets vs current price (may not be available on free tier — skip if error)
+
+STEP 2 — FACTOR SCORING (compute each factor, assign +/- weight):
+
+| # | Factor | Bullish Signal (+) | Bearish Signal (-) |
+|---|--------|-------------------|-------------------|
+| 1 | **Earnings History** | Beat last 3-4 quarters consistently | Mixed or missed recently |
+| 2 | **Surprise Magnitude** | Beat by >5% avg | Beat by <2% or missed |
+| 3 | **Pre-Earnings Run** | Stock flat/down into earnings (room to pop) | Stock already up 10%+ (priced in) |
+| 4 | **Technical Setup** | RSI 40-60, above SMA50, MACD bullish | RSI >70 overbought, below SMA50 |
+| 5 | **News Sentiment** | Positive/bullish news flow | Negative/bearish news flow |
+| 6 | **Analyst Consensus** | Majority Buy, recent upgrades | Majority Hold/Sell, downgrades |
+| 7 | **Price Target Gap** | Current price well below mean target | At or above mean target |
+| 8 | **Sector Momentum** | Sector peers rallying, tailwinds | Sector weakness, headwinds |
+| 9 | **Guidance Expectations** | Low bar, easy to beat | High expectations, hard to impress |
+| 10 | **Macro Environment** | Dovish Fed, risk-on market, VIX low | Hawkish Fed, risk-off, VIX elevated |
+
+STEP 3 — FACTOR TABLE (present this to the user):
+
+Show a clean factor scorecard:
+```
+FACTOR SCORECARD — [SYMBOL] Earnings [DATE]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Factor                  | Signal  | Weight | Notes
+─────────────────────────────────────────
+Earnings History        | ✅ Bull | +2     | Beat 4/4 quarters
+Surprise Magnitude      | ✅ Bull | +1     | Avg surprise +6.2%
+Pre-Earnings Run        | ⚠️ Caution | -1  | Already up 12% this month
+Technical Setup         | ✅ Bull | +1     | RSI 55, above SMA50
+News Sentiment          | ✅ Bull | +1     | 8 positive vs 2 negative
+Analyst Consensus       | ✅ Bull | +1     | 28 Buy, 5 Hold, 1 Sell
+Price Target Gap        | ⚠️ Neutral | 0   | At consensus target
+Sector Momentum         | ✅ Bull | +1     | Tech sector strong
+Guidance Expectations   | ❌ Bear | -1     | Street expects raised guidance
+Macro Environment       | ⚠️ Neutral | 0   | Mixed signals
+─────────────────────────────────────────
+TOTAL SCORE             |         | +5     | Bullish
+```
+
+STEP 4 — VERDICT:
+- Score +5 or higher → **BTST — High Conviction** (strong buy before earnings)
+- Score +3 to +4 → **BTST — Moderate Conviction** (lean buy, smaller position)
+- Score +1 to +2 → **NEUTRAL — Skip** (too close to call, not worth the risk)
+- Score -1 to -2 → **NEUTRAL — Skip** (lean bearish but not enough edge)
+- Score -3 to -4 → **STBT — Moderate Conviction** (lean short/sell)
+- Score -5 or lower → **STBT — High Conviction** (strong short before earnings)
+
+STEP 5 — EXPLAIN THE CONTRARIAN RISKS:
+ALWAYS explain what could go wrong AGAINST your recommendation:
+- If BTST: "What could make this stock DROP despite good earnings?"
+  → Sell-the-news after big run-up, guidance disappointment, sector rotation, macro shock
+- If STBT: "What could make this stock RALLY despite weak setup?"
+  → Surprise guidance raise, strategic announcement (buyback, M&A), short squeeze
+
+CRITICAL — WHY STOCKS MOVE OPPOSITE TO RESULTS:
+This is the #1 thing users want explained. Common reasons:
+
+**Stock DROPS after BEATING earnings:**
+1. "Buy the rumor, sell the news" — stock already ran up 15%+ pricing in the beat
+2. Guidance disappointment — beat this quarter but lowered next quarter outlook
+3. Revenue miss despite EPS beat — cost-cutting drove EPS, not real growth
+4. Margin compression — revenue grew but margins shrank
+5. Whisper number miss — street expected a bigger beat than consensus
+6. Sector rotation — money rotating out regardless of individual results
+7. Macro overhang — Fed meeting, CPI data, geopolitical event same week
+8. Valuation ceiling — already trading at 40x PE, no room for multiple expansion
+
+**Stock RALLIES after MISSING earnings:**
+1. Low expectations — bar was so low that even a small miss was "better than feared"
+2. Guidance raise — missed this quarter but raised full-year outlook
+3. Strategic catalyst — announced buyback, restructuring, new product
+4. Short squeeze — heavy short interest, shorts covering on any positive signal
+5. Sector tailwind — entire sector rallying regardless
+6. Margin improvement — revenue missed but margins expanded (efficiency play)
+7. One-time charges — "adjusted" earnings actually beat if you exclude one-time items
+
+ALWAYS reference these specific reasons with actual data from your analysis.
+Do NOT just say "it could go down." Say WHY with the exact mechanism.
+
+═══════════════════════════════════════
+EARNINGS CALENDAR AWARENESS
+═══════════════════════════════════════
+
+When the user asks "what earnings are coming up" or "which stocks report this week":
+- Use get_earnings_calendar to fetch upcoming earnings
+- Group by date, show timing (BMO = Before Market Open, AMC = After Market Close)
+- Highlight any stocks the user holds in their portfolio
+- For major names (FAANG, Mag 7), proactively suggest running the BTST/STBT analysis
+
+═══════════════════════════════════════
 COMMUNICATION STYLE
 ═══════════════════════════════════════
 
@@ -417,6 +524,50 @@ TOOLS = [
             "required": ["symbol"],
         },
     },
+    {
+        "name": "get_earnings_calendar",
+        "description": "Get upcoming and recent earnings announcements. Shows which stocks report earnings, when (date), and timing (before/after market). Also shows actual vs estimate if already reported.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_date": {"type": "string", "description": "Start date YYYY-MM-DD (default: 7 days ago)"},
+                "to_date": {"type": "string", "description": "End date YYYY-MM-DD (default: 14 days ahead)"},
+            },
+        },
+    },
+    {
+        "name": "get_earnings_surprises",
+        "description": "Get last 4 quarters of earnings surprises for a stock — actual EPS vs estimate, surprise %, and beat rate. Essential for BTST/STBT analysis.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock ticker"}
+            },
+            "required": ["symbol"],
+        },
+    },
+    {
+        "name": "get_recommendation_trends",
+        "description": "Get analyst recommendation consensus — how many analysts say Buy/Hold/Sell and the overall consensus rating",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock ticker"}
+            },
+            "required": ["symbol"],
+        },
+    },
+    {
+        "name": "get_price_target",
+        "description": "Get analyst price target consensus — high, low, mean, median targets vs current price",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock ticker"}
+            },
+            "required": ["symbol"],
+        },
+    },
 ]
 
 TOOL_HANDLERS = {
@@ -432,6 +583,12 @@ TOOL_HANDLERS = {
     "get_watchlist": lambda args: portfolio.get_watchlist(),
     "add_to_watchlist": lambda args: portfolio.add_to_watchlist(args["symbol"].upper()),
     "remove_from_watchlist": lambda args: portfolio.remove_from_watchlist(args["symbol"].upper()),
+    "get_earnings_calendar": lambda args: market_data.get_earnings_calendar(
+        from_date=args.get("from_date"), to_date=args.get("to_date")
+    ),
+    "get_earnings_surprises": lambda args: market_data.get_earnings_surprises(args["symbol"].upper()),
+    "get_recommendation_trends": lambda args: market_data.get_recommendation_trends(args["symbol"].upper()),
+    "get_price_target": lambda args: market_data.get_price_target(args["symbol"].upper()),
 }
 
 

@@ -82,6 +82,42 @@ def get_watchlist():
         return JSONResponse(status_code=500, content={"error": "Failed to fetch watchlist"})
 
 
+@app.get("/api/earnings")
+def earnings_calendar(from_date: str = None, to_date: str = None):
+    try:
+        return market_data.get_earnings_calendar(from_date=from_date, to_date=to_date)
+    except Exception as e:
+        logger.error(f"Earnings calendar error: {e}")
+        return JSONResponse(status_code=500, content={"error": "Failed to fetch earnings calendar"})
+
+
+@app.get("/api/earnings/{symbol}")
+def earnings_surprises(symbol: str):
+    try:
+        return market_data.get_earnings_surprises(symbol.upper())
+    except Exception as e:
+        logger.error(f"Earnings surprises error for {symbol}: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to fetch earnings for {symbol}"})
+
+
+@app.get("/api/recommendations/{symbol}")
+def recommendations(symbol: str):
+    try:
+        return market_data.get_recommendation_trends(symbol.upper())
+    except Exception as e:
+        logger.error(f"Recommendations error for {symbol}: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to fetch recommendations for {symbol}"})
+
+
+@app.get("/api/price-target/{symbol}")
+def price_target(symbol: str):
+    try:
+        return market_data.get_price_target(symbol.upper())
+    except Exception as e:
+        logger.error(f"Price target error for {symbol}: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to fetch price target for {symbol}"})
+
+
 class AddHoldingRequest(BaseModel):
     symbol: str
     qty: float
