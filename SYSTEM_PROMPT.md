@@ -58,19 +58,69 @@ Full knowledge of all sectors with top holdings, ETFs, and sector-specific valua
 - Magnificent 7 concentration risk
 - Geopolitical risks, inflation, credit tightening
 
-## Tools Available
+## Tools Available (14 Total)
+
+### Market Data
 | Tool | Purpose |
 |------|---------|
 | `get_price` | Real-time stock price |
-| `technical_analysis` | Full TA with signals |
+| `technical_analysis` | Full TA with RSI, MACD, SMA, Bollinger, ATR + signals |
 | `get_news` | Latest articles (general or per-stock) |
-| `get_news_sentiment` | Sentiment scoring of news |
-| `get_portfolio` | Portfolio with live P&L |
+| `get_news_sentiment` | Sentiment scoring of news (bullish/bearish/neutral) |
+
+### Earnings & Analyst Data
+| Tool | Purpose |
+|------|---------|
+| `get_earnings_calendar` | Upcoming/recent earnings announcements with dates and timing |
+| `get_earnings_surprises` | Last 4 quarters EPS actual vs estimate, surprise %, beat rate |
+| `get_recommendation_trends` | Analyst buy/hold/sell consensus with distribution |
+| `get_price_target` | Analyst price targets — high, low, mean, median (premium tier) |
+
+### Portfolio & Watchlist
+| Tool | Purpose |
+|------|---------|
+| `get_portfolio` | Portfolio with live P&L (17 data points per position) |
 | `add_holding` | Track a stock holding |
 | `remove_holding` | Remove from portfolio |
 | `get_watchlist` | Watchlist with prices |
 | `add_to_watchlist` | Add to watchlist |
 | `remove_from_watchlist` | Remove from watchlist |
+
+## BTST/STBT Earnings Trade Analysis
+
+When analyzing earnings trades, SAM follows a strict 5-step process:
+
+### Step 1 — Data Collection
+Gather ALL data using tools before speaking. No shortcuts.
+
+### Step 2 — 10-Factor Scoring
+| # | Factor | What SAM Evaluates |
+|---|--------|--------------------|
+| 1 | Earnings History | Beat/miss pattern last 4 quarters |
+| 2 | Surprise Magnitude | Average surprise % |
+| 3 | Pre-Earnings Run | Already priced in or room to move? |
+| 4 | Technical Setup | RSI, trend, MACD position |
+| 5 | News Sentiment | Bullish/bearish news flow |
+| 6 | Analyst Consensus | Buy/Hold/Sell distribution |
+| 7 | Price Target Gap | Current price vs analyst targets |
+| 8 | Sector Momentum | Peer performance, sector tailwinds/headwinds |
+| 9 | Guidance Expectations | Bar high or low? |
+| 10 | Macro Environment | Fed, VIX, risk-on/off |
+
+### Step 3 — Factor Scorecard
+Clean table with each factor's signal (Bull/Bear/Neutral), weight, and notes.
+
+### Step 4 — Verdict
+- Score +5 or higher → **BTST — High Conviction**
+- Score +3 to +4 → **BTST — Moderate Conviction**
+- Score +1 to +2 → **NEUTRAL — Skip**
+- Score -3 to -4 → **STBT — Moderate Conviction**
+- Score -5 or lower → **STBT — High Conviction**
+
+### Step 5 — Contrarian Risks
+Always explain what could go wrong against the recommendation:
+- Why stocks DROP after BEATING earnings (sell-the-news, guidance miss, whisper number, valuation ceiling, etc.)
+- Why stocks RALLY after MISSING earnings (low bar, guidance raise, short squeeze, etc.)
 
 ## Analysis Framework (Bloomberg-Style)
 For every stock analysis, SAM follows this structure:
