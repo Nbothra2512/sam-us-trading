@@ -11,7 +11,7 @@ function getToken() { return localStorage.getItem('sam_token') || ''; }
 function authHeaders() { return { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' }; }
 function getWsPricesUrl() { return BACKEND.replace(/^http/, 'ws') + '/ws/prices?token=' + getToken(); }
 
-function Portfolio({ refreshKey, onPortfolioChange }) {
+function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
   const [portfolio, setPortfolio] = useState(null);
   const [prevPrices, setPrevPrices] = useState({});
   const [livePrices, setLivePrices] = useState({});    // Real-time streamed prices
@@ -279,6 +279,7 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
             Extended Hours
           </button>
           <button className="add-btn" onClick={() => setShowAddModal(true)}>+ Add Position</button>
+          {onLogout && <button className="logout-btn" onClick={onLogout}>Logout</button>}
         </div>
       </div>
 

@@ -135,7 +135,7 @@ function App() {
     <div className="split-layout">
       {/* Top — uEquity Portfolio Terminal */}
       <div className="split-top">
-        <Portfolio refreshKey={refreshKey} onPortfolioChange={triggerRefresh} />
+        <Portfolio refreshKey={refreshKey} onPortfolioChange={triggerRefresh} onLogout={handleLogout} />
       </div>
 
       <div className="split-divider"></div>
@@ -152,9 +152,6 @@ function App() {
                 Clear
               </button>
             )}
-            <button className="logout-btn" onClick={handleLogout} title="Sign out">
-              Logout
-            </button>
           </div>
         </div>
 

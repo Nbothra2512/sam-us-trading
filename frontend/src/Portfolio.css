@@ -115,6 +115,22 @@
 }
 .add-btn:hover { opacity: 0.85; }
 
+.logout-btn {
+  background: none;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.logout-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+
 /* Summary bar */
 .summary-bar {
   display: flex;
