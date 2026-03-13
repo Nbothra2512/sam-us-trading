@@ -5,6 +5,39 @@
 
 ---
 
+## [v1.12.0] — 2026-03-14
+
+### Copyright: All Source Files
+- Added copyright headers to 7 remaining files: `__init__.py`, `PROJECT_OVERVIEW.md`, `PROJECT_STRUCTURE.md`, `DISCOVERY.md`, `SYSTEM_PROMPT.md`, `.env.example`, `favicon.svg`
+- All 28 source files now carry: "Copyright (c) 2026 Smart Touch Infotech Private Limited"
+
+**Commit:** `24f2c32`
+
+---
+
+## [v1.11.0] — 2026-03-14
+
+### Enhancement: Professional Response Formatting
+- **SAM system prompt** — Added comprehensive RESPONSE FORMATTING section with strict Markdown rules:
+  - `##` headings for sections, `###` for sub-sections
+  - Clean tables (2-4 columns, compact, aligned)
+  - `> blockquotes` for verdicts and key takeaways
+  - `code` backticks for price levels
+  - Emoji only as section markers on headings, not scattered in body text
+  - Clear verdict block format with conviction level
+- **Chat CSS overhaul** — Professional financial terminal styling:
+  - Tables: rounded corners, header uppercase, alternating row shading, hover highlight
+  - Headings: h1 accent-colored, h2 with border-bottom divider, h3 for sub-sections
+  - Blockquotes: left accent border with subtle background
+  - Code: accent-tinted background with mono font
+  - Lists: accent-colored markers, proper spacing
+  - Links: underline on hover
+  - Assistant messages: wider max-width (95%), more padding
+
+**Files changed:** `agent.py`, `App.css`
+
+---
+
 ## [v1.10.0] — 2026-03-14
 
 ### Bug Fixes (Comprehensive Code Review — 10 bugs fixed)

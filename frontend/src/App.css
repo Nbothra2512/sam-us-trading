@@ -396,11 +396,11 @@ body {
 /* Messages */
 .message {
   display: flex;
-  max-width: 85%;
+  max-width: 90%;
 }
 
 .message.user { align-self: flex-end; }
-.message.assistant { align-self: flex-start; }
+.message.assistant { align-self: flex-start; max-width: 95%; }
 
 .message.error .message-content {
   background: rgba(239, 68, 68, 0.1);
@@ -424,49 +424,225 @@ body {
   background: var(--assistant-bg);
   border: 1px solid var(--border);
   border-radius: 14px 14px 14px 4px;
+  padding: 16px 20px;
 }
 
-.message-content p { margin-bottom: 6px; }
+/* ─── SAM Response Typography ─────────────────────────────────── */
+/* Headings — used as section titles */
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4 {
+  margin: 0;
+  padding: 0;
+}
+
+.message-content h1 {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--accent);
+  margin-bottom: 4px;
+  letter-spacing: 0.3px;
+}
+
+.message-content h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 16px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.message-content h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 14px;
+  margin-bottom: 4px;
+}
+
+.message-content h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-top: 10px;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 11px;
+}
+
+/* Paragraphs */
+.message-content p {
+  margin-bottom: 8px;
+  line-height: 1.65;
+}
 .message-content p:last-child { margin-bottom: 0; }
+
+/* Strong/Bold — accent colored for key terms */
+.message-content strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Emphasis */
+.message-content em {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Inline code */
 .message-content code {
-  background: rgba(0,0,0,0.3);
-  padding: 1px 5px;
-  border-radius: 3px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent);
+  padding: 2px 6px;
+  border-radius: 4px;
   font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  border: 1px solid rgba(59, 130, 246, 0.15);
 }
 [data-theme="light"] .message-content code {
-  background: rgba(0,0,0,0.07);
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.12);
 }
+
+/* Code blocks */
 .message-content pre {
-  background: rgba(0,0,0,0.3);
-  padding: 10px;
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 12px 14px;
+  border-radius: 8px;
   overflow-x: auto;
-  margin: 6px 0;
+  margin: 8px 0;
+  border: 1px solid var(--border);
 }
 [data-theme="light"] .message-content pre {
-  background: rgba(0,0,0,0.05);
+  background: rgba(0, 0, 0, 0.04);
 }
-.message-content pre code { background: none; padding: 0; }
+.message-content pre code {
+  background: none;
+  padding: 0;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+}
+
+/* ─── Tables — Financial Data Style ──────────────────────────── */
 .message-content table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
-  margin: 6px 0;
-}
-.message-content th, .message-content td {
+  margin: 8px 0;
+  border-radius: 8px;
+  overflow: hidden;
   border: 1px solid var(--border);
-  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.message-content thead {
+  background: var(--header-bg);
+}
+
+.message-content th {
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+.message-content td {
+  padding: 7px 12px;
   font-size: 12px;
   text-align: left;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
 }
-.message-content th { background: rgba(0,0,0,0.2); }
-[data-theme="light"] .message-content th { background: rgba(0,0,0,0.05); }
-.message-content strong { color: var(--accent); }
-.message-content ul, .message-content ol {
-  padding-left: 18px;
+
+.message-content tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.message-content tbody tr {
+  transition: background 0.15s;
+}
+
+.message-content tbody tr:hover {
+  background: var(--table-hover);
+}
+
+/* Alternate row shading */
+.message-content tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.08);
+}
+[data-theme="light"] .message-content tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* ─── Lists — Verdicts, Key Points ───────────────────────────── */
+.message-content ul,
+.message-content ol {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+
+.message-content li {
   margin: 4px 0;
+  line-height: 1.6;
+  padding-left: 4px;
 }
-.message-content li { margin: 2px 0; }
+
+.message-content li::marker {
+  color: var(--accent);
+}
+
+/* Nested lists */
+.message-content li > ul,
+.message-content li > ol {
+  margin: 2px 0;
+}
+
+/* ─── Horizontal Rule — Section Divider ──────────────────────── */
+.message-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+/* ─── Blockquote — Verdicts, Warnings ────────────────────────── */
+.message-content blockquote {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+}
+
+.message-content blockquote p {
+  margin-bottom: 4px;
+}
+
+.message-content blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* ─── Links ──────────────────────────────────────────────────── */
+.message-content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.message-content a:hover {
+  border-bottom-color: var(--accent);
+}
 
 .typing {
   display: flex;
