@@ -34,11 +34,13 @@ async def _connect_finnhub():
     """Connect to Finnhub WebSocket and stream trades."""
     global _finnhub_ws, _running
     url = f"wss://ws.finnhub.io?token={config.FINNHUB_API_KEY}"
+    backoff = 2
 
     while _running:
         try:
             async with websockets.connect(url, ping_interval=30, ping_timeout=10) as ws:
                 _finnhub_ws = ws
+                backoff = 2  # Reset on successful connection
                 logger.info("Finnhub WebSocket connected")
 
                 # Re-subscribe all symbols
@@ -57,13 +59,14 @@ async def _connect_finnhub():
                         logger.error(f"Trade processing error: {e}")
 
         except websockets.exceptions.ConnectionClosed:
-            logger.warning("Finnhub WebSocket disconnected, reconnecting in 2s...")
+            logger.warning(f"Finnhub WebSocket disconnected, reconnecting in {backoff}s...")
         except Exception as e:
             logger.error(f"Finnhub WebSocket error: {e}")
 
         _finnhub_ws = None
         if _running:
-            await asyncio.sleep(2)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 60)  # Exponential backoff, max 60s
 
 
 async def _process_trades(trades: list):
