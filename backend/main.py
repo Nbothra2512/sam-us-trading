@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Smart Touch Infotech Private Limited. All rights reserved.
+# SAM (Smart Analyst for Markets) — Proprietary Software
+
 """FastAPI server — WebSocket chat + REST endpoints + real-time price streaming."""
 import json
 import logging

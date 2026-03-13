@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Smart Touch Infotech Private Limited. All rights reserved.
+# SAM (Smart Analyst for Markets) — Proprietary Software
+
 """Real-time price streaming via Finnhub WebSocket.
 
 Connects to Finnhub's WebSocket API for trade-by-trade data.

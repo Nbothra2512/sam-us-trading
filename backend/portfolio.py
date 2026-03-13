@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Smart Touch Infotech Private Limited. All rights reserved.
+# SAM (Smart Analyst for Markets) — Proprietary Software
+
 """Portfolio tracking — full uEquity terminal with all 17 data points per position.
 
 Calculations (from uEquity spec):

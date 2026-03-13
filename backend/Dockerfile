@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Smart Touch Infotech Private Limited. All rights reserved.
+# SAM (Smart Analyst for Markets) — Proprietary Software
+
 FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .
