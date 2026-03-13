@@ -104,9 +104,8 @@ def _get_company_name(symbol: str) -> str:
 
 def _get_full_quote(symbol: str) -> dict:
     """Get quote with bid/ask from Finnhub.
-    Finnhub free tier quote: c=current, o=open, h=high, l=low, pc=prev close, d=change, dp=change%
-    For bid/ask we use the quote endpoint which gives best bid/ask on supported tiers.
-    On free tier we estimate bid/ask from the spread around last price.
+    Quote fields: c=current, o=open, h=high, l=low, pc=prev close, d=change, dp=change%
+    Bid/ask estimated from spread around last price for liquid stocks.
     """
     try:
         q = fc.quote(symbol)

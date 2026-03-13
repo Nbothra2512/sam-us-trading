@@ -7,6 +7,7 @@ import anthropic
 import config
 import market_data
 import portfolio
+import historical_data
 
 client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
@@ -219,6 +220,29 @@ RISK FACTORS TO MONITOR:
 - Concentration risk: Magnificent 7 (AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA) dominate S&P 500
 
 ═══════════════════════════════════════
+HISTORICAL DATA & SCREENING
+═══════════════════════════════════════
+
+You have access to 6 months of historical daily OHLCV data for 50 major US stocks across all GICS sectors.
+
+HISTORICAL TOOLS:
+- get_stock_history → 6-month performance: total return, volatility, max drawdown, monthly returns
+- compare_stocks → Side-by-side comparison: rank stocks by return, volatility, drawdown
+- get_sector_performance → Sector-level analysis: which sectors are leading/lagging, best/worst in each
+- screen_stocks → Stock screener with criteria: top_gainers, top_losers, most_volatile, high_volume, oversold (RSI<30), overbought (RSI>70)
+- get_market_summary → Overall market health: breadth, gainers vs losers, sector rotation
+
+USE THESE TOOLS WHEN:
+- User asks "how has X performed?" → get_stock_history
+- User asks "compare AAPL vs MSFT" → compare_stocks
+- User asks "which sectors are hot?" → get_sector_performance
+- User asks "what's oversold?" or "find me a bounce play" → screen_stocks with oversold
+- User asks "how's the market?" → get_market_summary + live data
+- BTST analysis → check stock's recent momentum via get_stock_history before scoring
+
+COMBINE historical data with live data for the most complete analysis. Historical shows the trend, live shows the current moment.
+
+═══════════════════════════════════════
 ANALYSIS FRAMEWORKS
 ═══════════════════════════════════════
 
@@ -256,7 +280,7 @@ STEP 1 — DATA COLLECTION (use ALL these tools before speaking):
   c) get_news_sentiment → news flow and sentiment (bullish/bearish/neutral)
   d) get_earnings_surprises → last 4 quarters: did they beat or miss? By how much?
   e) get_recommendation_trends → analyst consensus (buy/hold/sell distribution)
-  f) get_price_target → analyst targets vs current price (may not be available on free tier — skip if error)
+  f) get_price_target → analyst targets vs current price (skip if error — requires higher Finnhub tier)
 
 STEP 2 — FACTOR SCORING (compute each factor, assign +/- weight):
 
@@ -571,6 +595,71 @@ TOOLS = [
             "required": ["symbol"],
         },
     },
+    {
+        "name": "get_stock_history",
+        "description": "Get 6-month historical data for a stock — total return, volatility, max drawdown, monthly returns, high/low range. Uses stored historical database.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock ticker"},
+                "days": {"type": "integer", "description": "Lookback period in days (default 180, max 180)"},
+            },
+            "required": ["symbol"],
+        },
+    },
+    {
+        "name": "compare_stocks",
+        "description": "Compare performance of multiple stocks side by side — ranked by return with volatility, drawdown, volume. Great for peer analysis.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbols": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of stock tickers to compare (e.g. ['AAPL', 'MSFT', 'GOOGL'])",
+                },
+                "days": {"type": "integer", "description": "Lookback period in days (default 180)"},
+            },
+            "required": ["symbols"],
+        },
+    },
+    {
+        "name": "get_sector_performance",
+        "description": "Get performance summary by sector — average return, best/worst stock in each sector. Shows which sectors are leading/lagging.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "description": "Lookback period in days (default 180)"},
+            },
+        },
+    },
+    {
+        "name": "screen_stocks",
+        "description": "Screen stocks by criteria: top_gainers, top_losers, most_volatile, high_volume, oversold (RSI<30), overbought (RSI>70). Returns ranked list with return%, volatility, RSI.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "criteria": {
+                    "type": "string",
+                    "enum": ["top_gainers", "top_losers", "most_volatile", "high_volume", "oversold", "overbought"],
+                    "description": "Screening criteria",
+                },
+                "days": {"type": "integer", "description": "Lookback period in days (default 30)"},
+                "limit": {"type": "integer", "description": "Number of results (default 10)"},
+            },
+            "required": ["criteria"],
+        },
+    },
+    {
+        "name": "get_market_summary",
+        "description": "Overall US market summary — gainers vs losers count, average return, market breadth, sector rotation. Uses stored data for 50 major US stocks.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "description": "Lookback period in days (default 30)"},
+            },
+        },
+    },
 ]
 
 TOOL_HANDLERS = {
@@ -592,6 +681,15 @@ TOOL_HANDLERS = {
     "get_earnings_surprises": lambda args: market_data.get_earnings_surprises(args["symbol"].upper()),
     "get_recommendation_trends": lambda args: market_data.get_recommendation_trends(args["symbol"].upper()),
     "get_price_target": lambda args: market_data.get_price_target(args["symbol"].upper()),
+    "get_stock_history": lambda args: historical_data.get_stock_history(args["symbol"].upper(), args.get("days", 180)),
+    "compare_stocks": lambda args: historical_data.compare_stocks(
+        [s.upper() for s in args["symbols"]], args.get("days", 180)
+    ),
+    "get_sector_performance": lambda args: historical_data.get_sector_performance(args.get("days", 180)),
+    "screen_stocks": lambda args: historical_data.screen_stocks(
+        args["criteria"], args.get("days", 30), args.get("limit", 10)
+    ),
+    "get_market_summary": lambda args: historical_data.get_market_summary(args.get("days", 30)),
 }
 
 

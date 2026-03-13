@@ -285,12 +285,12 @@ When you ask SAM to analyze a stock, it follows a 6-step Bloomberg-style process
 
 ## 10. Known Limitations
 
-1. **Finnhub Free Tier** — Stock candles (403) and price targets (403) are blocked; technical analysis and price targets require paid upgrade
+1. **Price Targets (403)** — Requires higher Finnhub tier than Marketdata-Basic; SAM skips gracefully
 2. **Read-Only** — SAM analyzes but does not execute trades (by design, for safety)
 3. **News Sentiment** — Keyword-based scoring, not deep NLP
-4. **Bid/Ask** — Estimated from last price on free tier (not real order book data)
+4. **Bid/Ask** — Estimated from spread around last price (not real order book data)
 5. **Extended Hours** — Pre-market/after-hours data only available during those windows
-6. **60 API calls/min** — Finnhub free tier rate limit
+6. **300 API calls/second** — Finnhub Marketdata-Basic rate limit
 
 ---
 

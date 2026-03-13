@@ -13,6 +13,7 @@ import agent
 import market_data
 import portfolio
 import live_feed
+import historical_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -172,6 +173,51 @@ async def remove_holding(req: RemoveHoldingRequest):
     except Exception as e:
         logger.error(f"Remove holding error: {e}")
         return JSONResponse(status_code=500, content={"error": f"Failed to remove {req.symbol}"})
+
+
+# ─── Historical Data Endpoints ─────────────────────────────────────
+@app.post("/api/historical/download")
+def download_historical():
+    """Download 6 months of data for all 50 stocks. Takes ~30 seconds."""
+    try:
+        result = historical_data.download_all(months=6)
+        return result
+    except Exception as e:
+        logger.error(f"Historical download error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/historical/status")
+def historical_status():
+    """Check what historical data is stored."""
+    try:
+        return historical_data.get_download_status()
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/historical/{symbol}")
+def stock_history(symbol: str, days: int = 180):
+    try:
+        return historical_data.get_stock_history(symbol.upper(), days)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/historical/screen/{criteria}")
+def stock_screen(criteria: str, days: int = 30, limit: int = 10):
+    try:
+        return historical_data.screen_stocks(criteria, days, limit)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/api/market-summary")
+def market_summary(days: int = 30):
+    try:
+        return historical_data.get_market_summary(days)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 # ─── Real-time price streaming WebSocket ───────────────────────────
