@@ -152,7 +152,7 @@ function App() {
                 Clear
               </button>
             )}
-            <button className="clear-btn" onClick={handleLogout} title="Sign out">
+            <button className="logout-btn" onClick={handleLogout} title="Sign out">
               Logout
             </button>
           </div>
