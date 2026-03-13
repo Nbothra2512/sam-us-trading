@@ -45,18 +45,22 @@
   --modal-input-bg: #f1f5f9;
 }
 
-body {
+html, body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--text);
   height: 100vh;
   overflow: hidden;
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 .app-root {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 /* ─── Ticker Tape ────────────────────────────────────────────────── */
@@ -784,7 +788,8 @@ body {
 /* ─── Fancy Login Page ──────────────────────────────────────────── */
 .login-page {
   position: relative;
-  width: 100vw;
+  width: 100%;
+  max-width: 100vw;
   height: 100vh;
   display: flex;
   align-items: center;
@@ -1229,6 +1234,16 @@ body {
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    overflow: hidden;
+  }
+
+  .mobile-content {
+    overflow-x: hidden;
+  }
+
+  .mobile-panel {
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .ticker-label {
@@ -1243,6 +1258,7 @@ body {
     height: 24px;
   }
 
+  /* ── Chat on mobile ──────────────────────────────── */
   .chat-header {
     padding: 6px 10px;
   }
@@ -1269,12 +1285,37 @@ body {
   }
 
   .message {
-    max-width: 95%;
+    max-width: 98%;
+  }
+
+  .message.assistant {
+    max-width: 98%;
   }
 
   .message-content {
     font-size: 13px;
     padding: 8px 10px;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  /* Tables inside chat — scroll horizontally inside bubble */
+  .message-content table {
+    font-size: 11px;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .message-content th,
+  .message-content td {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  .message-content pre {
+    font-size: 11px;
+    max-width: calc(100vw - 60px);
   }
 
   .welcome-chips {
@@ -1286,9 +1327,16 @@ body {
     padding: 5px 8px;
   }
 
-  /* Login page */
+  /* ── Login page on mobile ────────────────────────── */
+  .login-page {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
   .login-card {
     width: 92vw;
+    max-width: 92vw;
     padding: 24px;
   }
 
@@ -1312,8 +1360,8 @@ body {
 
   /* Modal full-width */
   .modal-overlay .modal {
-    width: 95vw;
-    max-width: 95vw;
+    width: 90vw;
+    max-width: 90vw;
   }
 
   /* Toast */
@@ -1324,12 +1372,18 @@ body {
     top: 28px;
   }
 
-  /* Compact terminal header */
+  /* ── Terminal header — mobile compact ─────────────── */
+  .terminal {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   .terminal-header {
     padding: 8px 10px;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     align-items: stretch;
+    overflow: hidden;
   }
 
   .terminal-title {
@@ -1350,6 +1404,7 @@ body {
     gap: 6px;
     flex-wrap: wrap;
     justify-content: flex-start;
+    overflow: hidden;
   }
 
   /* Hide less important controls on mobile */
@@ -1359,32 +1414,38 @@ body {
 
   .terminal-controls .feed-badge {
     font-size: 9px;
-    padding: 3px 8px;
+    padding: 3px 6px;
   }
 
   .terminal-controls .session-badge {
     font-size: 9px;
-    padding: 3px 8px;
+    padding: 3px 6px;
   }
 
   .add-btn {
-    font-size: 11px;
-    padding: 5px 10px;
+    font-size: 10px;
+    padding: 4px 8px;
   }
 
   .logout-btn {
-    font-size: 11px;
-    padding: 5px 10px;
+    font-size: 10px;
+    padding: 4px 8px;
   }
 
   .theme-toggle {
-    width: 28px;
-    height: 28px;
-    font-size: 14px;
+    width: 26px;
+    height: 26px;
+    font-size: 13px;
+  }
+
+  .search-bar-wrap {
+    flex: 1;
+    min-width: 0;
   }
 
   .search-bar {
-    width: 100px;
+    width: 100%;
+    min-width: 0;
     font-size: 11px;
     padding: 5px 8px;
   }
@@ -1394,13 +1455,20 @@ body {
     font-size: 11px;
   }
 
-  /* Summary bar — 2-column grid on mobile */
+  .search-popup {
+    right: 0;
+    left: auto;
+    max-width: 200px;
+  }
+
+  /* ── Summary bar — 2-column grid ─────────────────── */
   .summary-bar {
     padding: 8px 10px;
     gap: 8px;
     flex-wrap: wrap;
     display: grid;
     grid-template-columns: 1fr 1fr;
+    overflow: hidden;
   }
 
   .summary-item.summary-chart {
@@ -1419,9 +1487,17 @@ body {
     height: 60px;
   }
 
-  /* Equity table — compact */
+  /* ── Equity table — horizontally scrollable only inside table-wrap ── */
+  .table-wrap {
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
   .equity-table {
     font-size: 11px;
+    min-width: 600px; /* allow horizontal scroll within table-wrap */
   }
 
   .equity-table th,
@@ -1437,11 +1513,13 @@ body {
     font-size: 9px;
   }
 
+  /* ── Legend — wrap on mobile ──────────────────────── */
   .legend {
     padding: 6px 10px;
     gap: 6px;
     flex-wrap: wrap;
     font-size: 9px;
+    overflow: hidden;
   }
 
   /* Watchlist */
@@ -1485,10 +1563,12 @@ body {
     font-size: 9px;
   }
 
+  /* Hide feed badge on very small screens */
   .terminal-controls .feed-badge {
     display: none;
   }
 
+  /* Search takes full row */
   .search-bar-wrap {
     width: 100%;
     order: 10;
@@ -1499,7 +1579,7 @@ body {
     flex: 1;
   }
 
-  /* Summary bar — single column */
+  /* Summary bar */
   .summary-bar {
     grid-template-columns: 1fr 1fr;
     gap: 6px;
@@ -1523,9 +1603,20 @@ body {
     height: 18px;
   }
 
+  /* Equity table even more compact */
+  .equity-table {
+    font-size: 10px;
+  }
+
+  .equity-table th,
+  .equity-table td {
+    padding: 5px 4px;
+  }
+
   /* Login adjustments */
   .login-card {
     width: 94vw;
+    max-width: 94vw;
     padding: 20px;
     border-radius: 14px;
   }

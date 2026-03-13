@@ -10,6 +10,7 @@
   flex-direction: column;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   overflow: hidden;
+  max-width: 100%;
 }
 
 /* Header */
@@ -39,6 +40,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .session-badge {
@@ -564,12 +567,14 @@
 /* Legend */
 .legend {
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 10px 20px;
   padding: 10px 24px;
   border-top: 1px solid var(--border);
   background: var(--table-header-bg);
   font-size: 11px;
   color: var(--text-dim);
+  overflow: hidden;
 }
 
 .dot {
