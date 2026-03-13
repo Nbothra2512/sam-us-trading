@@ -243,6 +243,41 @@ USE THESE TOOLS WHEN:
 COMBINE historical data with live data for the most complete analysis. Historical shows the trend, live shows the current moment.
 
 ═══════════════════════════════════════
+EARNINGS PATTERN ANALYSIS
+═══════════════════════════════════════
+
+You can analyze how a stock has HISTORICALLY behaved around earnings announcements using the analyze_earnings_pattern tool. This is powerful for predicting likely price action around upcoming earnings.
+
+WHAT IT SHOWS (per quarter):
+- **Pre-Earnings Drift**: How much the stock moved 5 days, 3 days, and 1 day before earnings. Reveals if the market "front-runs" the result.
+- **Earnings Day Gap**: The overnight gap between prior close and earnings-day open. Shows the immediate market reaction to the announcement.
+- **Earnings Day Return**: Full-day move (prev close → close). Shows whether the initial reaction held or reversed intraday.
+- **Intraday Range**: High-to-low range on earnings day as % of open. Shows volatility intensity.
+- **Volume Surge**: Earnings-day volume vs 20-day average. Typical surges are 2-5x.
+- **Post-Earnings Drift**: How the stock moved 1, 3, and 5 days AFTER earnings. Reveals if the market continues the initial move or reverses.
+
+PATTERN SUMMARY (aggregated across quarters):
+- **Beat Rate**: How often the company beats EPS estimates
+- **Avg Gap on Beat vs Miss**: Typical gap-up on beats vs gap-down on misses
+- **Pre-Earnings Drift Direction**: Does the stock consistently rally or sell off into earnings?
+- **Post-Earnings Momentum**: Does the initial reaction continue or reverse in the following days?
+- **Volume Surge**: Typical volume multiplier on earnings day
+- **Tendencies**: Identified patterns like "buy-the-rumor-sell-the-news", "pre-earnings rally", "post-earnings momentum continuation"
+
+USE THIS TOOL WHEN:
+- User asks "what happened last time [STOCK] reported earnings?"
+- User asks about historical earnings patterns or reactions
+- BTST/STBT analysis — combine with the factor scorecard for a data-backed view
+- User asks "does [STOCK] usually gap up/down on earnings?"
+- User asks "is there a pattern in how [STOCK] trades around results?"
+
+HOW TO PRESENT:
+1. Show a per-quarter table with key metrics (gap%, day return%, post-drift)
+2. Highlight the pattern summary and identified tendencies
+3. Connect the historical pattern to the upcoming earnings setup
+4. Combine with live technical/fundamental data for a complete picture
+
+═══════════════════════════════════════
 ANALYSIS FRAMEWORKS
 ═══════════════════════════════════════
 
@@ -281,6 +316,7 @@ STEP 1 — DATA COLLECTION (use ALL these tools before speaking):
   d) get_earnings_surprises → last 4 quarters: did they beat or miss? By how much?
   e) get_recommendation_trends → analyst consensus (buy/hold/sell distribution)
   f) get_price_target → analyst targets vs current price (skip if error — requires higher Finnhub tier)
+  g) analyze_earnings_pattern → CRITICAL: historical price behavior around past earnings — pre-drift, gap, post-drift, volume surge, and tendencies. This reveals how the stock ACTUALLY traded on prior result days.
 
 STEP 2 — FACTOR SCORING (compute each factor, assign +/- weight):
 
@@ -296,6 +332,7 @@ STEP 2 — FACTOR SCORING (compute each factor, assign +/- weight):
 | 8 | **Sector Momentum** | Sector peers rallying, tailwinds | Sector weakness, headwinds |
 | 9 | **Guidance Expectations** | Low bar, easy to beat | High expectations, hard to impress |
 | 10 | **Macro Environment** | Dovish Fed, risk-on market, VIX low | Hawkish Fed, risk-off, VIX elevated |
+| 11 | **Historical Earnings Pattern** | Stock gaps up on beats, post-drift continues, no sell-the-news tendency | Stock sells off even on beats, buy-the-rumor-sell-the-news pattern, post-drift reverses |
 
 STEP 3 — FACTOR TABLE (present this to the user):
 
@@ -315,8 +352,9 @@ Price Target Gap        | ⚠️ Neutral | 0   | At consensus target
 Sector Momentum         | ✅ Bull | +1     | Tech sector strong
 Guidance Expectations   | ❌ Bear | -1     | Street expects raised guidance
 Macro Environment       | ⚠️ Neutral | 0   | Mixed signals
+Hist. Earnings Pattern  | ✅ Bull | +1     | Gaps up on beats, no sell-the-news
 ─────────────────────────────────────────
-TOTAL SCORE             |         | +5     | Bullish
+TOTAL SCORE             |         | +6     | Bullish
 ```
 
 STEP 4 — VERDICT:
@@ -358,6 +396,28 @@ This is the #1 thing users want explained. Common reasons:
 
 ALWAYS reference these specific reasons with actual data from your analysis.
 Do NOT just say "it could go down." Say WHY with the exact mechanism.
+
+STEP 6 — HISTORICAL EARNINGS PATTERN TABLE:
+After the factor scorecard, show the historical earnings pattern from analyze_earnings_pattern.
+Present a compact per-quarter table:
+
+```
+HISTORICAL EARNINGS REACTIONS — [SYMBOL]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Quarter    | EPS    | Beat? | Gap%   | Day Return% | Post 5D% | Volume
+───────────────────────────────────────────────────────────────────────
+Q3 2025    | $1.46  | ✅     | +3.2%  | +4.1%       | +2.3%    | 3.2x avg
+Q2 2025    | $1.33  | ✅     | +1.8%  | -0.5%       | -1.1%    | 2.8x avg
+Q1 2025    | $1.52  | ❌     | -4.6%  | -6.2%       | -3.4%    | 4.1x avg
+Q4 2024    | $2.18  | ✅     | +5.1%  | +3.8%       | +4.2%    | 3.5x avg
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PATTERN: Gaps up on beats (+3.4% avg), post-earnings momentum continues.
+No buy-the-rumor-sell-the-news tendency detected.
+```
+
+Then summarize the key tendencies and connect them to the current setup:
+- "Based on the last 4 quarters, [STOCK] tends to gap up +X% on beats and the move continues for 5 days..."
+- "WARNING: Despite beating 3/4 quarters, the stock sold off on 2 of those beats — classic buy-the-rumor-sell-the-news"
 
 ═══════════════════════════════════════
 EARNINGS CALENDAR AWARENESS
@@ -704,6 +764,18 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "analyze_earnings_pattern",
+        "description": "Analyze historical price behavior around past earnings announcements. Shows pre-earnings drift, earnings day gap/reaction, post-earnings move, and volume surge for each of the last N quarters. Identifies patterns like pre-earnings rally/selloff, buy-the-rumor-sell-the-news, post-earnings momentum continuation/reversal.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock ticker (e.g. AAPL, TSLA, NVDA)"},
+                "quarters": {"type": "integer", "description": "Number of past earnings quarters to analyze (default 4, max 8)"},
+            },
+            "required": ["symbol"],
+        },
+    },
 ]
 
 TOOL_HANDLERS = {
@@ -734,6 +806,9 @@ TOOL_HANDLERS = {
         args["criteria"], args.get("days", 30), args.get("limit", 10)
     ),
     "get_market_summary": lambda args: historical_data.get_market_summary(args.get("days", 30)),
+    "analyze_earnings_pattern": lambda args: historical_data.analyze_earnings_pattern(
+        args["symbol"].upper(), args.get("quarters", 4)
+    ),
 }
 
 

@@ -365,6 +365,214 @@ def get_market_summary(days: int = 30) -> dict:
     }
 
 
+def analyze_earnings_pattern(symbol: str, quarters: int = 4) -> dict:
+    """Analyze historical price behavior around earnings announcements.
+
+    For each past earnings date, calculates:
+    - Pre-earnings drift (5 days, 3 days, 1 day before)
+    - Earnings day reaction (open-to-close, prev-close-to-open gap)
+    - Post-earnings move (1 day, 3 days, 5 days after)
+    - Volume surge vs average
+    - Overall pattern summary and tendencies
+    """
+    symbol = symbol.upper()
+    conn = _get_db()
+
+    # Get past earnings dates from Finnhub
+    try:
+        earnings_data = fc.company_earnings(symbol, limit=quarters)
+    except Exception as e:
+        conn.close()
+        return {"symbol": symbol, "error": f"Could not fetch earnings history: {e}"}
+
+    if not earnings_data:
+        conn.close()
+        return {"symbol": symbol, "error": f"No earnings history found for {symbol}"}
+
+    # Get all historical candles for this symbol
+    all_rows = conn.execute(
+        "SELECT date, open, high, low, close, volume FROM candles WHERE symbol = ? ORDER BY date",
+        (symbol,)
+    ).fetchall()
+    conn.close()
+
+    if len(all_rows) < 20:
+        return {"symbol": symbol, "error": f"Insufficient historical data for {symbol}. Run /api/historical/download first."}
+
+    # Build date-indexed lookup
+    df = pd.DataFrame(all_rows, columns=["date", "open", "high", "low", "close", "volume"])
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date").sort_index()
+    avg_volume = int(df["volume"].mean())
+
+    earnings_analysis = []
+
+    for earn in earnings_data:
+        period = earn.get("period", "")
+        if not period:
+            continue
+
+        earnings_date = pd.Timestamp(period)
+        quarter_label = f"Q{earn.get('quarter', '?')} {earn.get('year', '?')}"
+
+        # Find the closest trading day to the earnings date
+        mask = df.index >= earnings_date
+        if not mask.any():
+            continue
+        actual_date_idx = df.index.get_indexer([earnings_date], method="nearest")[0]
+        if actual_date_idx < 0 or actual_date_idx >= len(df):
+            continue
+
+        actual_date = df.index[actual_date_idx]
+
+        # Helper to get return between two index positions
+        def get_return(idx_from, idx_to):
+            if idx_from < 0 or idx_to < 0 or idx_from >= len(df) or idx_to >= len(df):
+                return None
+            return round(((df.iloc[idx_to]["close"] - df.iloc[idx_from]["close"]) / df.iloc[idx_from]["close"]) * 100, 2)
+
+        def get_row(offset):
+            idx = actual_date_idx + offset
+            if 0 <= idx < len(df):
+                return df.iloc[idx]
+            return None
+
+        # Earnings day data
+        e_day = get_row(0)
+        prev_day = get_row(-1)
+
+        if e_day is None or prev_day is None:
+            continue
+
+        # Pre-earnings drift
+        pre_5d = get_return(actual_date_idx - 5, actual_date_idx - 1) if actual_date_idx >= 5 else None
+        pre_3d = get_return(actual_date_idx - 3, actual_date_idx - 1) if actual_date_idx >= 3 else None
+        pre_1d = get_return(actual_date_idx - 1, actual_date_idx - 1)  # single day = 0 (prev day close)
+
+        # Earnings day metrics
+        gap_pct = round(((e_day["open"] - prev_day["close"]) / prev_day["close"]) * 100, 2)
+        e_day_return = round(((e_day["close"] - prev_day["close"]) / prev_day["close"]) * 100, 2)
+        e_day_intraday = round(((e_day["close"] - e_day["open"]) / e_day["open"]) * 100, 2)
+        e_day_range = round(((e_day["high"] - e_day["low"]) / e_day["low"]) * 100, 2)
+
+        # Volume on earnings day vs average
+        e_vol = int(e_day["volume"])
+        vol_ratio = round(e_vol / avg_volume, 1) if avg_volume > 0 else 0
+
+        # Post-earnings drift
+        post_1d = get_return(actual_date_idx, actual_date_idx + 1)
+        post_3d = get_return(actual_date_idx, actual_date_idx + 3)
+        post_5d = get_return(actual_date_idx, actual_date_idx + 5)
+
+        # EPS surprise
+        eps_actual = earn.get("actual")
+        eps_estimate = earn.get("estimate")
+        surprise_pct = earn.get("surprisePercent")
+        beat = None
+        if eps_actual is not None and eps_estimate is not None:
+            beat = eps_actual > eps_estimate
+
+        earnings_analysis.append({
+            "quarter": quarter_label,
+            "earnings_date": str(actual_date.date()),
+            "eps_actual": eps_actual,
+            "eps_estimate": eps_estimate,
+            "surprise_pct": surprise_pct,
+            "beat": beat,
+            "pre_earnings": {
+                "5d_drift_pct": pre_5d,
+                "3d_drift_pct": pre_3d,
+            },
+            "earnings_day": {
+                "gap_pct": gap_pct,
+                "total_return_pct": e_day_return,
+                "intraday_pct": e_day_intraday,
+                "day_range_pct": e_day_range,
+                "close_price": round(float(e_day["close"]), 2),
+                "volume": e_vol,
+                "volume_vs_avg": f"{vol_ratio}x",
+            },
+            "post_earnings": {
+                "1d_drift_pct": post_1d,
+                "3d_drift_pct": post_3d,
+                "5d_drift_pct": post_5d,
+            },
+        })
+
+    if not earnings_analysis:
+        return {"symbol": symbol, "error": "Could not match earnings dates with historical data"}
+
+    # ─── Pattern Summary ─────────────────────────────────────────
+    beats = [e for e in earnings_analysis if e["beat"] is True]
+    misses = [e for e in earnings_analysis if e["beat"] is False]
+
+    # Avg gap on beat vs miss
+    beat_gaps = [e["earnings_day"]["gap_pct"] for e in beats]
+    miss_gaps = [e["earnings_day"]["gap_pct"] for e in misses]
+    beat_returns = [e["earnings_day"]["total_return_pct"] for e in beats]
+    miss_returns = [e["earnings_day"]["total_return_pct"] for e in misses]
+
+    # Pre-earnings drift tendency
+    pre_drifts = [e["pre_earnings"]["5d_drift_pct"] for e in earnings_analysis if e["pre_earnings"]["5d_drift_pct"] is not None]
+    post_drifts = [e["post_earnings"]["5d_drift_pct"] for e in earnings_analysis if e["post_earnings"]["5d_drift_pct"] is not None]
+
+    # Avg volume surge
+    vol_surges = [float(e["earnings_day"]["volume_vs_avg"].replace("x", "")) for e in earnings_analysis]
+
+    def safe_avg(lst):
+        return round(sum(lst) / len(lst), 2) if lst else None
+
+    patterns = {
+        "total_quarters_analyzed": len(earnings_analysis),
+        "beat_rate": f"{len(beats)}/{len(earnings_analysis)}",
+        "avg_gap_on_beat_pct": safe_avg(beat_gaps),
+        "avg_gap_on_miss_pct": safe_avg(miss_gaps),
+        "avg_earnings_day_return_on_beat_pct": safe_avg(beat_returns),
+        "avg_earnings_day_return_on_miss_pct": safe_avg(miss_returns),
+        "avg_pre_5d_drift_pct": safe_avg(pre_drifts),
+        "avg_post_5d_drift_pct": safe_avg(post_drifts),
+        "avg_volume_surge": f"{safe_avg(vol_surges)}x" if vol_surges else None,
+        "tendencies": [],
+    }
+
+    # Identify tendencies
+    if safe_avg(pre_drifts) is not None:
+        if safe_avg(pre_drifts) > 1:
+            patterns["tendencies"].append("Stock tends to RALLY into earnings (bullish pre-earnings drift)")
+        elif safe_avg(pre_drifts) < -1:
+            patterns["tendencies"].append("Stock tends to SELL OFF into earnings (bearish pre-earnings drift)")
+        else:
+            patterns["tendencies"].append("No strong pre-earnings drift pattern")
+
+    if safe_avg(beat_gaps) is not None and safe_avg(beat_gaps) > 0:
+        patterns["tendencies"].append(f"On earnings BEATS, stock gaps UP avg {safe_avg(beat_gaps)}%")
+    if safe_avg(miss_gaps) is not None and safe_avg(miss_gaps) < 0:
+        patterns["tendencies"].append(f"On earnings MISSES, stock gaps DOWN avg {safe_avg(miss_gaps)}%")
+
+    if safe_avg(post_drifts) is not None:
+        if safe_avg(post_drifts) > 1:
+            patterns["tendencies"].append("Post-earnings momentum tends to CONTINUE (drift higher)")
+        elif safe_avg(post_drifts) < -1:
+            patterns["tendencies"].append("Post-earnings momentum tends to REVERSE (mean reversion)")
+        else:
+            patterns["tendencies"].append("No strong post-earnings drift pattern")
+
+    if safe_avg(vol_surges) and safe_avg(vol_surges) > 3:
+        patterns["tendencies"].append(f"Heavy volume on earnings day ({safe_avg(vol_surges)}x avg) — high conviction moves")
+
+    # Check if stock tends to sell off even on beats (buy-the-rumor-sell-the-news)
+    beat_selloffs = [e for e in beats if e["earnings_day"]["total_return_pct"] < -1]
+    if len(beat_selloffs) > len(beats) / 2 and len(beats) > 1:
+        patterns["tendencies"].append("WARNING: Stock has tendency to SELL OFF even on earnings beats (buy-the-rumor-sell-the-news)")
+
+    return {
+        "symbol": symbol,
+        "quarters_analyzed": len(earnings_analysis),
+        "pattern_summary": patterns,
+        "quarterly_detail": earnings_analysis,
+    }
+
+
 def get_download_status() -> dict:
     """Check what data we have stored."""
     conn = _get_db()

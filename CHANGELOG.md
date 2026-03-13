@@ -5,6 +5,21 @@
 
 ---
 
+## [v1.13.0] — 2026-03-14
+
+### Feature: Earnings Pattern Analysis (Historical)
+- New SAM tool: `analyze_earnings_pattern` — analyzes historical price behavior around past earnings announcements
+  - Per-quarter breakdown: pre-earnings drift (5d, 3d, 1d), earnings day gap, day return, intraday range, volume surge, post-earnings drift (1d, 3d, 5d)
+  - Pattern summary: beat rate, avg gap on beat/miss, pre/post drift direction, volume surge, identified tendencies
+  - Detects patterns: pre-earnings rally/selloff, buy-the-rumor-sell-the-news, post-earnings momentum continuation/reversal
+- New REST endpoint: `GET /api/earnings-pattern/{symbol}?quarters=4`
+- SAM system prompt updated with EARNINGS PATTERN ANALYSIS knowledge section
+- Tool count: 20 total (was 19)
+
+**Files changed:** `agent.py`, `main.py`, `historical_data.py`, `CHANGELOG.md`
+
+---
+
 ## [v1.12.0] — 2026-03-14
 
 ### Copyright: All Source Files

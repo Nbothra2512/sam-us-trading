@@ -281,6 +281,16 @@ def market_summary(days: int = 30, user=Depends(auth.require_auth)):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.get("/api/earnings-pattern/{symbol}")
+def earnings_pattern(symbol: str, quarters: int = 4, user=Depends(auth.require_auth)):
+    """Analyze historical price behavior around past earnings announcements."""
+    try:
+        return historical_data.analyze_earnings_pattern(symbol.upper(), quarters)
+    except Exception as e:
+        logger.error(f"Earnings pattern error for {symbol}: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to analyze earnings pattern for {symbol}"})
+
+
 # ─── Real-time price streaming WebSocket ───────────────────────────
 @app.websocket("/ws/prices")
 async def websocket_prices(websocket: WebSocket, token: str = ""):
