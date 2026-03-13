@@ -295,7 +295,10 @@ async def websocket_prices(websocket: WebSocket, token: str = ""):
         while True:
             # Listen for subscription commands from frontend
             data = await websocket.receive_text()
-            msg = json.loads(data)
+            try:
+                msg = json.loads(data)
+            except json.JSONDecodeError:
+                continue
             if msg.get("type") == "subscribe":
                 symbols = msg.get("symbols", [])
                 for s in symbols:
@@ -322,7 +325,11 @@ async def websocket_chat(websocket: WebSocket, token: str = ""):
     try:
         while True:
             data = await websocket.receive_text()
-            user_msg = json.loads(data)
+            try:
+                user_msg = json.loads(data)
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({"type": "error", "content": "Invalid message format"}))
+                continue
             user_text = user_msg.get("message", "")
 
             messages.append({"role": "user", "content": user_text})

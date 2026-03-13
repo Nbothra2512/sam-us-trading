@@ -196,16 +196,21 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
   const priceWsRef = useRef(null);
   const refreshInterval = useRef(null);
   const flashTimerRef = useRef(null);
+  // Use refs to avoid stale closures in fetchPortfolio
+  const portfolioRef = useRef(null);
+  const prevPricesRef = useRef({});
 
   // Fetch full portfolio data (REST)
   const fetchPortfolio = useCallback(() => {
     fetch(`${API_URL}/portfolio`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
-        if (portfolio && portfolio.holdings) {
+        const currentPortfolio = portfolioRef.current;
+        const currentPrevPrices = prevPricesRef.current;
+        if (currentPortfolio && currentPortfolio.holdings) {
           const flashes = {};
           data.holdings.forEach(h => {
-            const prev = prevPrices[h.symbol];
+            const prev = currentPrevPrices[h.symbol];
             if (prev !== undefined && prev !== h.last) {
               flashes[h.symbol] = h.last > prev ? 'flash-green' : 'flash-red';
             }
@@ -218,11 +223,13 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
         }
         const prices = {};
         data.holdings.forEach(h => { prices[h.symbol] = h.last; });
+        prevPricesRef.current = prices;
         setPrevPrices(prices);
+        portfolioRef.current = data;
         setPortfolio(data);
       })
       .catch(() => {});
-  }, [portfolio, prevPrices]);
+  }, []);
 
   // Real-time price WebSocket
   useEffect(() => {
@@ -231,8 +238,10 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
       const ws = new WebSocket(getWsPricesUrl());
       ws.onopen = () => {
         setFeedStatus('live');
-        if (portfolio && portfolio.holdings) {
-          const symbols = portfolio.holdings.map(h => h.symbol);
+        // Subscribe using ref to avoid stale closure
+        const p = portfolioRef.current;
+        if (p && p.holdings) {
+          const symbols = p.holdings.map(h => h.symbol);
           if (symbols.length > 0) {
             ws.send(JSON.stringify({ type: 'subscribe', symbols }));
           }
@@ -246,7 +255,7 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
               const updated = { ...prev };
               const flashes = {};
               for (const [symbol, info] of Object.entries(data.prices)) {
-                const oldPrice = prev[symbol]?.price || prevPrices[symbol];
+                const oldPrice = prev[symbol]?.price || prevPricesRef.current[symbol];
                 if (oldPrice !== undefined && info.price !== oldPrice) {
                   flashes[symbol] = info.price > oldPrice ? 'flash-green' : 'flash-red';
                 }
@@ -279,15 +288,14 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
     };
   }, []);
 
-  // Re-subscribe when portfolio changes
+  // Re-subscribe when holdings symbols change (not just count)
+  const holdingSymbols = portfolio?.holdings?.map(h => h.symbol).sort().join(',') || '';
   useEffect(() => {
-    if (priceWsRef.current && priceWsRef.current.readyState === WebSocket.OPEN && portfolio?.holdings) {
-      const symbols = portfolio.holdings.map(h => h.symbol);
-      if (symbols.length > 0) {
-        priceWsRef.current.send(JSON.stringify({ type: 'subscribe', symbols }));
-      }
+    if (priceWsRef.current && priceWsRef.current.readyState === WebSocket.OPEN && holdingSymbols) {
+      const symbols = holdingSymbols.split(',');
+      priceWsRef.current.send(JSON.stringify({ type: 'subscribe', symbols }));
     }
-  }, [portfolio?.holdings?.length]);
+  }, [holdingSymbols]);
 
   // REST refresh on mount + every 30s
   useEffect(() => {

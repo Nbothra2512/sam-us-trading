@@ -69,12 +69,16 @@ def _save(data: dict):
 
 
 def _get_market_session() -> str:
-    """Determine current US market session based on ET."""
-    now = datetime.utcnow()
-    hour_et = (now.hour - 5) % 24
-    minute = now.minute
-    t = hour_et * 60 + minute
-    weekday = now.weekday()
+    """Determine current US market session based on ET (DST-aware)."""
+    try:
+        from zoneinfo import ZoneInfo
+        now_et = datetime.now(ZoneInfo("America/New_York"))
+    except ImportError:
+        # Fallback for Python < 3.9
+        from datetime import timezone, timedelta
+        now_et = datetime.now(timezone(timedelta(hours=-5)))
+    t = now_et.hour * 60 + now_et.minute
+    weekday = now_et.weekday()
     if weekday >= 5:
         return "CLOSED"
     if t < 240:

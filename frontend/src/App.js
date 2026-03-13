@@ -25,27 +25,28 @@ function authHeaders() {
 }
 
 // ─── Ticker Tape Component ──────────────────────────────────────
+const TICKER_INDICES = [
+  { symbol: 'SPY', label: 'S&P 500' },
+  { symbol: 'QQQ', label: 'NASDAQ' },
+  { symbol: 'DIA', label: 'DOW' },
+];
+
 function TickerTape() {
   const [tickers, setTickers] = useState([]);
-  const INDICES = [
-    { symbol: 'SPY', label: 'S&P 500' },
-    { symbol: 'QQQ', label: 'NASDAQ' },
-    { symbol: 'DIA', label: 'DOW' },
-  ];
 
   const fetchTickers = useCallback(() => {
     const token = getToken();
     if (!token) return;
     Promise.all(
-      INDICES.map(idx =>
+      TICKER_INDICES.map(idx =>
         fetch(`${API_URL}/quote/${idx.symbol}`, { headers: { Authorization: `Bearer ${token}` } })
           .then(r => r.ok ? r.json() : null)
           .catch(() => null)
       )
     ).then(results => {
       const data = results.map((r, i) => {
-        if (!r || r.error) return { ...INDICES[i], price: null, change: 0, change_pct: 0 };
-        return { ...INDICES[i], price: r.price, change: r.change, change_pct: r.change_pct };
+        if (!r || r.error) return { ...TICKER_INDICES[i], price: null, change: 0, change_pct: 0 };
+        return { ...TICKER_INDICES[i], price: r.price, change: r.change, change_pct: r.change_pct };
       });
       setTickers(data);
     });
@@ -59,7 +60,7 @@ function TickerTape() {
 
   if (tickers.length === 0) return null;
 
-  // Duplicate for seamless scrolling
+  // Triplicate for seamless scrolling (matches CSS translateX(-33.33%))
   const items = [...tickers, ...tickers, ...tickers];
 
   return (
@@ -111,6 +112,95 @@ function saveTabMessages(tabId, messages) {
   localStorage.setItem(`sam_chat_${tabId}`, JSON.stringify(messages));
 }
 
+// ─── Chat Panel (shared between desktop and mobile) ─────────────
+function ChatPanel({ messages, setMessages, input, setInput, isTyping, connected,
+  chatTabs, activeTab, switchTab, addTab, closeTab, sendMessage, handleKeyDown,
+  messagesEndRef, inputRef, showTabs = true }) {
+  return (
+    <>
+      <div className="chat-header">
+        <div className="chat-brand">SAM <span>Smart Analyst for Markets</span></div>
+        <div className="chat-controls">
+          <span className={`status-dot ${connected ? 'live' : 'off'}`}></span>
+          <span className="status-text">{connected ? 'Live' : 'Offline'}</span>
+          {messages.length > 0 && (
+            <button className="clear-btn" onClick={() => { setMessages([]); localStorage.removeItem(`sam_chat_${activeTab}`); }}>
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Chat Tabs */}
+      {showTabs && (
+        <div className="chat-tabs">
+          {chatTabs.map(tab => (
+            <div
+              key={tab.id}
+              className={`chat-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => switchTab(tab.id)}
+            >
+              <span className="chat-tab-name">{tab.name}</span>
+              {chatTabs.length > 1 && (
+                <button className="chat-tab-close" onClick={(e) => closeTab(tab.id, e)}>&times;</button>
+              )}
+            </div>
+          ))}
+          <button className="chat-tab-add" onClick={addTab} title="New chat tab">+</button>
+        </div>
+      )}
+
+      <div className="chat-messages">
+        {messages.length === 0 && (
+          <div className="chat-welcome">
+            <span className="welcome-text">Ask SAM anything about the US stock market — prices, news, analysis, or manage your portfolio</span>
+            <div className="welcome-chips">
+              <button onClick={() => setInput("What's NVDA trading at?")}>NVDA Price</button>
+              <button onClick={() => setInput('News sentiment on TSLA')}>TSLA Sentiment</button>
+              <button onClick={() => setInput('Analyze AAPL technicals')}>Analyze AAPL</button>
+              <button onClick={() => setInput('Add 10 shares of AAPL at $180 to my portfolio')}>Add AAPL</button>
+              <button onClick={() => setInput('Show my portfolio')}>My Portfolio</button>
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <div key={i} className={`message ${msg.role}`}>
+            <div className="message-content">
+              {msg.role === 'assistant' ? (
+                <ReactMarkdown>{msg.content}</ReactMarkdown>
+              ) : (
+                msg.content
+              )}
+            </div>
+          </div>
+        ))}
+
+        {isTyping && (
+          <div className="message assistant">
+            <div className="typing">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="chat-input">
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Ask SAM about prices, news, technicals, or manage your portfolio..."
+          rows={1}
+        />
+        <button onClick={sendMessage} disabled={!connected || !input.trim()}>Send</button>
+      </div>
+    </>
+  );
+}
+
 // ─── Main App ───────────────────────────────────────────────────
 function App() {
   const [token, setToken] = useState(() => localStorage.getItem('sam_token') || '');
@@ -137,10 +227,18 @@ function App() {
   const isDragging = useRef(false);
 
   const wsRef = useRef(null);
-  const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
+  // Separate refs for desktop and mobile to avoid cross-contamination
+  const desktopEndRef = useRef(null);
+  const mobileEndRef = useRef(null);
+  const desktopInputRef = useRef(null);
+  const mobileInputRef = useRef(null);
   const layoutRef = useRef(null);
   const prevPortfolioRef = useRef(null);
+
+  // Track which 5% alerts have already fired (by symbol, per session)
+  const alertedSymbolsRef = useRef(new Set());
+  // Track if earnings check has been done today
+  const earningsCheckDateRef = useRef('');
 
   // Apply theme
   useEffect(() => {
@@ -152,12 +250,12 @@ function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem('sam_token');
     localStorage.removeItem('sam_user');
     setToken('');
     wsRef.current?.close();
-  };
+  }, []);
 
   // Verify token on mount
   useEffect(() => {
@@ -165,7 +263,7 @@ function App() {
     fetch(`${API_URL}/auth/verify`, { headers: authHeaders() })
       .then(r => { if (!r.ok) handleLogout(); })
       .catch(() => handleLogout());
-  }, [token]);
+  }, [token, handleLogout]);
 
   // Shared portfolio fetch
   const fetchPortfolio = useCallback(() => {
@@ -178,14 +276,16 @@ function App() {
         if (prevPortfolioRef.current && d.holdings) {
           const today = new Date().toISOString().slice(0, 10);
           d.holdings.forEach(h => {
-            // 5% move alert
-            if (Math.abs(h.day_chg_pct) >= 5) {
+            // 5% move alert — only fire once per symbol per session
+            if (Math.abs(h.day_chg_pct) >= 5 && !alertedSymbolsRef.current.has(h.symbol)) {
+              alertedSymbolsRef.current.add(h.symbol);
               const dir = h.day_chg_pct >= 0 ? 'up' : 'down';
               showToast(`${h.symbol} is ${dir} ${Math.abs(h.day_chg_pct).toFixed(1)}% today!`, 'alert');
             }
           });
-          // Earnings today check (only once per refresh cycle)
-          if (!prevPortfolioRef.current._earningsChecked) {
+          // Earnings today check — only once per day
+          if (earningsCheckDateRef.current !== today) {
+            earningsCheckDateRef.current = today;
             fetch(`${API_URL}/earnings?from_date=${today}&to_date=${today}`, { headers: authHeaders() })
               .then(r => r.ok ? r.json() : null)
               .then(earningsData => {
@@ -199,7 +299,6 @@ function App() {
                 }
               })
               .catch(() => {});
-            d._earningsChecked = true;
           }
         }
         prevPortfolioRef.current = d;
@@ -213,10 +312,8 @@ function App() {
             try {
               const snapshots = JSON.parse(localStorage.getItem('sam_pnl_snapshots') || '[]');
               const now = Date.now();
-              // Only add if last snapshot was > 5 minutes ago
               if (snapshots.length === 0 || now - snapshots[snapshots.length - 1].t > 300000) {
                 snapshots.push({ t: now, v: Math.round(totalVal * 100) / 100, c: Math.round(totalCost * 100) / 100 });
-                // Keep last 200 snapshots
                 if (snapshots.length > 200) snapshots.splice(0, snapshots.length - 200);
                 localStorage.setItem('sam_pnl_snapshots', JSON.stringify(snapshots));
               }
@@ -250,21 +347,23 @@ function App() {
         setTimeout(connect, 3000);
       };
       ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'typing') {
-          setIsTyping(data.status);
-        } else if (data.type === 'message') {
-          setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
-          triggerRefresh();
-        } else if (data.type === 'error') {
-          setMessages(prev => [...prev, { role: 'error', content: data.content }]);
-        }
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'typing') {
+            setIsTyping(data.status);
+          } else if (data.type === 'message') {
+            setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
+            triggerRefresh();
+          } else if (data.type === 'error') {
+            setMessages(prev => [...prev, { role: 'error', content: data.content }]);
+          }
+        } catch {}
       };
       wsRef.current = ws;
     };
     connect();
     return () => wsRef.current?.close();
-  }, [triggerRefresh, token]);
+  }, [triggerRefresh, token, handleLogout]);
 
   // Persist messages for active tab
   useEffect(() => {
@@ -276,8 +375,10 @@ function App() {
     saveChatTabs(chatTabs);
   }, [chatTabs]);
 
+  // Scroll to bottom — scroll whichever ref is currently mounted
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    desktopEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    mobileEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
   // Switch tab
@@ -348,7 +449,9 @@ function App() {
     setMessages(prev => [...prev, { role: 'user', content: msg }]);
     wsRef.current.send(JSON.stringify({ message: msg }));
     setInput('');
-    inputRef.current?.focus();
+    // Focus whichever input is visible
+    desktopInputRef.current?.focus();
+    mobileInputRef.current?.focus();
   };
 
   const handleKeyDown = (e) => {
@@ -421,89 +524,22 @@ function App() {
           </div>
         </div>
 
-        {/* Bottom — SAM Chat */}
+        {/* Bottom — SAM Chat (Desktop) */}
         {showChat && (
           <div
             className="split-bottom"
             style={panelMode === 'both' ? { height: `calc(${100 - splitPct}% - 14px)` } : { height: 'calc(100vh - 56px)' }}
           >
-            <div className="chat-header">
-              <div className="chat-brand">SAM <span>Smart Analyst for Markets</span></div>
-              <div className="chat-controls">
-                <span className={`status-dot ${connected ? 'live' : 'off'}`}></span>
-                <span className="status-text">{connected ? 'Live' : 'Offline'}</span>
-                {messages.length > 0 && (
-                  <button className="clear-btn" onClick={() => { setMessages([]); localStorage.removeItem(`sam_chat_${activeTab}`); }}>
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Chat Tabs */}
-            <div className="chat-tabs">
-              {chatTabs.map(tab => (
-                <div
-                  key={tab.id}
-                  className={`chat-tab ${activeTab === tab.id ? 'active' : ''}`}
-                  onClick={() => switchTab(tab.id)}
-                >
-                  <span className="chat-tab-name">{tab.name}</span>
-                  {chatTabs.length > 1 && (
-                    <button className="chat-tab-close" onClick={(e) => closeTab(tab.id, e)}>&times;</button>
-                  )}
-                </div>
-              ))}
-              <button className="chat-tab-add" onClick={addTab} title="New chat tab">+</button>
-            </div>
-
-            <div className="chat-messages">
-              {messages.length === 0 && (
-                <div className="chat-welcome">
-                  <span className="welcome-text">Ask SAM anything about the US stock market — prices, news, analysis, or manage your portfolio</span>
-                  <div className="welcome-chips">
-                    <button onClick={() => setInput("What's NVDA trading at?")}>NVDA Price</button>
-                    <button onClick={() => setInput('News sentiment on TSLA')}>TSLA Sentiment</button>
-                    <button onClick={() => setInput('Analyze AAPL technicals')}>Analyze AAPL</button>
-                    <button onClick={() => setInput('Add 10 shares of AAPL at $180 to my portfolio')}>Add AAPL</button>
-                    <button onClick={() => setInput('Show my portfolio')}>My Portfolio</button>
-                  </div>
-                </div>
-              )}
-
-              {messages.map((msg, i) => (
-                <div key={i} className={`message ${msg.role}`}>
-                  <div className="message-content">
-                    {msg.role === 'assistant' ? (
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    ) : (
-                      msg.content
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {isTyping && (
-                <div className="message assistant">
-                  <div className="typing">
-                    <span></span><span></span><span></span>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            <div className="chat-input">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask SAM about prices, news, technicals, or manage your portfolio..."
-                rows={1}
-              />
-              <button onClick={sendMessage} disabled={!connected || !input.trim()}>Send</button>
-            </div>
+            <ChatPanel
+              messages={messages} setMessages={setMessages}
+              input={input} setInput={setInput}
+              isTyping={isTyping} connected={connected}
+              chatTabs={chatTabs} activeTab={activeTab}
+              switchTab={switchTab} addTab={addTab} closeTab={closeTab}
+              sendMessage={sendMessage} handleKeyDown={handleKeyDown}
+              messagesEndRef={desktopEndRef} inputRef={desktopInputRef}
+              showTabs={true}
+            />
           </div>
         )}
       </div>
@@ -524,64 +560,16 @@ function App() {
           )}
           {mobileTab === 'chat' && (
             <div className="mobile-panel mobile-chat-panel">
-              <div className="chat-header">
-                <div className="chat-brand">SAM <span>Smart Analyst for Markets</span></div>
-                <div className="chat-controls">
-                  <span className={`status-dot ${connected ? 'live' : 'off'}`}></span>
-                  <span className="status-text">{connected ? 'Live' : 'Offline'}</span>
-                  {messages.length > 0 && (
-                    <button className="clear-btn" onClick={() => { setMessages([]); localStorage.removeItem(`sam_chat_${activeTab}`); }}>
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="chat-messages">
-                {messages.length === 0 && (
-                  <div className="chat-welcome">
-                    <span className="welcome-text">Ask SAM anything about the stock market</span>
-                    <div className="welcome-chips">
-                      <button onClick={() => setInput("What's NVDA trading at?")}>NVDA Price</button>
-                      <button onClick={() => setInput('Analyze AAPL')}>Analyze AAPL</button>
-                      <button onClick={() => setInput('Show my portfolio')}>Portfolio</button>
-                    </div>
-                  </div>
-                )}
-
-                {messages.map((msg, i) => (
-                  <div key={i} className={`message ${msg.role}`}>
-                    <div className="message-content">
-                      {msg.role === 'assistant' ? (
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                      ) : (
-                        msg.content
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {isTyping && (
-                  <div className="message assistant">
-                    <div className="typing">
-                      <span></span><span></span><span></span>
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-
-              <div className="chat-input">
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Ask SAM..."
-                  rows={1}
-                />
-                <button onClick={sendMessage} disabled={!connected || !input.trim()}>Send</button>
-              </div>
+              <ChatPanel
+                messages={messages} setMessages={setMessages}
+                input={input} setInput={setInput}
+                isTyping={isTyping} connected={connected}
+                chatTabs={chatTabs} activeTab={activeTab}
+                switchTab={switchTab} addTab={addTab} closeTab={closeTab}
+                sendMessage={sendMessage} handleKeyDown={handleKeyDown}
+                messagesEndRef={mobileEndRef} inputRef={mobileInputRef}
+                showTabs={true}
+              />
             </div>
           )}
         </div>
