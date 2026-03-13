@@ -6,8 +6,9 @@ import ReactMarkdown from 'react-markdown';
 import Portfolio from './Portfolio';
 import './App.css';
 
-const WS_URL = 'ws://localhost:8000/ws/chat';
-const API_URL = 'http://localhost:8000/api';
+const BACKEND = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+const WS_URL = BACKEND.replace(/^http/, 'ws') + '/ws/chat';
+const API_URL = BACKEND + '/api';
 
 function App() {
   const [messages, setMessages] = useState(() => {

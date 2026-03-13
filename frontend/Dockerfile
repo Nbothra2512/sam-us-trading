@@ -3,7 +3,7 @@
 
 FROM node:20-slim
 WORKDIR /app
-COPY package.json .
+COPY frontend/package.json .
 RUN npm install
-COPY . .
+COPY frontend/ .
 CMD ["npm", "start"]

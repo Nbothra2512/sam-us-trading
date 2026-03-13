@@ -4,8 +4,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Portfolio.css';
 
-const API_URL = 'http://localhost:8000/api';
-const WS_PRICES_URL = 'ws://localhost:8000/ws/prices';
+const BACKEND = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+const API_URL = BACKEND + '/api';
+const WS_PRICES_URL = BACKEND.replace(/^http/, 'ws') + '/ws/prices';
 
 function Portfolio({ refreshKey, onPortfolioChange }) {
   const [portfolio, setPortfolio] = useState(null);
