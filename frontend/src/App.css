@@ -971,26 +971,86 @@ body {
   color: #475569;
 }
 
+/* ─── Mobile Layout System ───────────────────────────────────────── */
+/* By default, mobile layout is hidden */
+.mobile-layout {
+  display: none;
+}
+
+/* ─── Mobile Bottom Nav ──────────────────────────────────────────── */
+.mobile-nav {
+  display: flex;
+  background: var(--sidebar);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  height: 56px;
+}
+
+.mobile-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+  padding: 6px 0;
+}
+
+.mobile-nav-btn.active {
+  color: var(--accent);
+}
+
+.mobile-nav-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mobile-nav-dot {
+  position: absolute;
+  top: 8px;
+  right: calc(50% - 16px);
+  width: 6px;
+  height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+}
+
+.mobile-content {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.mobile-panel {
+  height: 100%;
+  overflow: auto;
+}
+
+.mobile-chat-panel {
+  display: flex;
+  flex-direction: column;
+}
+
 /* ─── Mobile Responsive ──────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .split-layout {
-    flex-direction: column;
+  /* Hide desktop split, show mobile tab layout */
+  .desktop-layout {
+    display: none !important;
   }
 
-  .split-top,
-  .split-bottom {
-    height: auto !important;
+  .mobile-layout {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-height: 0;
-  }
-
-  .split-divider.draggable {
-    cursor: default;
-  }
-
-  /* Stack vertically — no drag resize on mobile */
-  .split-top {
-    max-height: 50vh;
   }
 
   .ticker-label {
@@ -999,6 +1059,10 @@ body {
 
   .ticker-item {
     gap: 4px;
+  }
+
+  .ticker-tape {
+    height: 24px;
   }
 
   .chat-header {
@@ -1022,7 +1086,7 @@ body {
   }
 
   .chat-input textarea {
-    font-size: 14px;
+    font-size: 16px; /* Prevents iOS zoom */
     padding: 8px 10px;
   }
 
@@ -1044,8 +1108,9 @@ body {
     padding: 5px 8px;
   }
 
+  /* Login page */
   .login-card {
-    width: 90vw;
+    width: 92vw;
     padding: 24px;
   }
 
@@ -1059,6 +1124,14 @@ body {
     display: none;
   }
 
+  .login-ticker {
+    height: 28px;
+  }
+
+  .login-welcome h2 {
+    font-size: 18px;
+  }
+
   /* Modal full-width */
   .modal-overlay .modal {
     width: 95vw;
@@ -1070,13 +1143,21 @@ body {
     left: 8px;
     right: 8px;
     max-width: none;
+    top: 28px;
   }
 
   /* Compact terminal header */
   .terminal-header {
     padding: 8px 10px;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .terminal-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .terminal-title h1 {
@@ -1090,65 +1171,201 @@ body {
   .terminal-controls {
     gap: 6px;
     flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
+  /* Hide less important controls on mobile */
+  .terminal-controls .ext-toggle {
+    display: none;
+  }
+
+  .terminal-controls .feed-badge {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  .terminal-controls .session-badge {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  .add-btn {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+
+  .logout-btn {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+
+  .theme-toggle {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .search-bar {
+    width: 100px;
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+
+  .search-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  /* Summary bar — 2-column grid on mobile */
   .summary-bar {
     padding: 8px 10px;
-    gap: 12px;
+    gap: 8px;
     flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .summary-item.summary-chart {
+    grid-column: 1 / -1;
   }
 
   .summary-value {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .summary-label {
     font-size: 9px;
   }
 
+  .pnl-chart-wrap {
+    height: 60px;
+  }
+
+  /* Equity table — compact */
   .equity-table {
     font-size: 11px;
   }
 
   .equity-table th,
   .equity-table td {
-    padding: 6px 6px;
+    padding: 6px 5px;
+  }
+
+  .symbol-name {
+    font-size: 12px;
+  }
+
+  .company-name {
+    font-size: 9px;
   }
 
   .legend {
     padding: 6px 10px;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
-    font-size: 10px;
-  }
-
-  /* Search bar */
-  .search-bar {
-    width: 120px;
+    font-size: 9px;
   }
 
   /* Watchlist */
   .watchlist-panel {
-    max-height: 150px;
+    padding: 0 10px 8px;
+    max-height: 120px;
+  }
+
+  .watchlist-toggle {
+    padding: 5px 10px;
+  }
+
+  .watchlist-item {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+
+  /* Chat tabs */
+  .chat-tabs {
+    padding: 0 6px;
+  }
+
+  .chat-tab {
+    padding: 5px 8px;
+    font-size: 10px;
   }
 }
 
 @media (max-width: 480px) {
   .ticker-tape {
     font-size: 10px;
+    height: 22px;
   }
 
   .ticker-symbol {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .ticker-price,
   .ticker-change {
-    font-size: 10px;
+    font-size: 9px;
   }
 
-  .terminal-controls .ext-toggle,
   .terminal-controls .feed-badge {
     display: none;
+  }
+
+  .search-bar-wrap {
+    width: 100%;
+    order: 10;
+  }
+
+  .search-bar {
+    width: 100%;
+    flex: 1;
+  }
+
+  /* Summary bar — single column */
+  .summary-bar {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .summary-value {
+    font-size: 13px;
+  }
+
+  .mobile-nav {
+    height: 50px;
+  }
+
+  .mobile-nav-btn {
+    font-size: 9px;
+  }
+
+  .mobile-nav-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Login adjustments */
+  .login-card {
+    width: 94vw;
+    padding: 20px;
+    border-radius: 14px;
+  }
+
+  .login-logo-text {
+    font-size: 18px;
+  }
+
+  .login-submit {
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  .login-stats {
+    gap: 14px;
+  }
+
+  .login-stat-value {
+    font-size: 14px;
   }
 }

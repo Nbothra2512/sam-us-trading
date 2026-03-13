@@ -132,6 +132,7 @@ function App() {
 
   // Panel state: 'both', 'portfolio', 'chat'
   const [panelMode, setPanelMode] = useState('both');
+  const [mobileTab, setMobileTab] = useState('portfolio');
   const [splitPct, setSplitPct] = useState(50);
   const isDragging = useRef(false);
 
@@ -376,12 +377,14 @@ function App() {
     <div className="app-root">
       <ToastContainer />
       <TickerTape />
-      <div className="split-layout" ref={layoutRef}>
+
+      {/* Desktop split layout */}
+      <div className="split-layout desktop-layout" ref={layoutRef}>
         {/* Top — uEquity Portfolio Terminal */}
         {showPortfolio && (
           <div
             className="split-top"
-            style={panelMode === 'both' ? { height: `${splitPct}%` } : { height: 'calc(100vh - 56px)' }}
+            style={panelMode === 'both' ? { height: `calc(${splitPct}% - 14px)` } : { height: 'calc(100vh - 56px)' }}
           >
             <Portfolio
               refreshKey={refreshKey}
@@ -422,7 +425,7 @@ function App() {
         {showChat && (
           <div
             className="split-bottom"
-            style={panelMode === 'both' ? { height: `${100 - splitPct}%` } : { height: 'calc(100vh - 56px)' }}
+            style={panelMode === 'both' ? { height: `calc(${100 - splitPct}% - 14px)` } : { height: 'calc(100vh - 56px)' }}
           >
             <div className="chat-header">
               <div className="chat-brand">SAM <span>Smart Analyst for Markets</span></div>
@@ -503,6 +506,108 @@ function App() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Mobile layout — tab-based switching */}
+      <div className="mobile-layout">
+        <div className="mobile-content">
+          {mobileTab === 'portfolio' && (
+            <div className="mobile-panel">
+              <Portfolio
+                refreshKey={refreshKey}
+                onPortfolioChange={triggerRefresh}
+                onLogout={handleLogout}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+              />
+            </div>
+          )}
+          {mobileTab === 'chat' && (
+            <div className="mobile-panel mobile-chat-panel">
+              <div className="chat-header">
+                <div className="chat-brand">SAM <span>Smart Analyst for Markets</span></div>
+                <div className="chat-controls">
+                  <span className={`status-dot ${connected ? 'live' : 'off'}`}></span>
+                  <span className="status-text">{connected ? 'Live' : 'Offline'}</span>
+                  {messages.length > 0 && (
+                    <button className="clear-btn" onClick={() => { setMessages([]); localStorage.removeItem(`sam_chat_${activeTab}`); }}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="chat-messages">
+                {messages.length === 0 && (
+                  <div className="chat-welcome">
+                    <span className="welcome-text">Ask SAM anything about the stock market</span>
+                    <div className="welcome-chips">
+                      <button onClick={() => setInput("What's NVDA trading at?")}>NVDA Price</button>
+                      <button onClick={() => setInput('Analyze AAPL')}>Analyze AAPL</button>
+                      <button onClick={() => setInput('Show my portfolio')}>Portfolio</button>
+                    </div>
+                  </div>
+                )}
+
+                {messages.map((msg, i) => (
+                  <div key={i} className={`message ${msg.role}`}>
+                    <div className="message-content">
+                      {msg.role === 'assistant' ? (
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      ) : (
+                        msg.content
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {isTyping && (
+                  <div className="message assistant">
+                    <div className="typing">
+                      <span></span><span></span><span></span>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              <div className="chat-input">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask SAM..."
+                  rows={1}
+                />
+                <button onClick={sendMessage} disabled={!connected || !input.trim()}>Send</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile bottom nav */}
+        <div className="mobile-nav">
+          <button
+            className={`mobile-nav-btn ${mobileTab === 'portfolio' ? 'active' : ''}`}
+            onClick={() => setMobileTab('portfolio')}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 3v18h18" /><path d="M7 16l4-8 4 4 4-6" />
+            </svg>
+            <span>Portfolio</span>
+          </button>
+          <button
+            className={`mobile-nav-btn ${mobileTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setMobileTab('chat')}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span>SAM Chat</span>
+            {connected && <span className="mobile-nav-dot" />}
+          </button>
+        </div>
       </div>
     </div>
   );
