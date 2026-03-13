@@ -127,6 +127,34 @@ def get_watchlist(user=Depends(auth.require_auth)):
         return JSONResponse(status_code=500, content={"error": "Failed to fetch watchlist"})
 
 
+class WatchlistRequest(BaseModel):
+    symbol: str
+
+
+@app.post("/api/watchlist/add")
+async def add_to_watchlist(req: WatchlistRequest, user=Depends(auth.require_auth)):
+    try:
+        result = portfolio.add_to_watchlist(req.symbol.upper())
+        await live_feed.subscribe(req.symbol.upper())
+        return result
+    except Exception as e:
+        logger.error(f"Add to watchlist error: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to add {req.symbol} to watchlist"})
+
+
+@app.post("/api/watchlist/remove")
+async def remove_from_watchlist(req: WatchlistRequest, user=Depends(auth.require_auth)):
+    try:
+        result = portfolio.remove_from_watchlist(req.symbol.upper())
+        data = portfolio._load()
+        if req.symbol.upper() not in [h["symbol"] for h in data.get("holdings", [])]:
+            await live_feed.unsubscribe(req.symbol.upper())
+        return result
+    except Exception as e:
+        logger.error(f"Remove from watchlist error: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Failed to remove {req.symbol} from watchlist"})
+
+
 @app.get("/api/earnings")
 def earnings_calendar(from_date: str = None, to_date: str = None, user=Depends(auth.require_auth)):
     try:

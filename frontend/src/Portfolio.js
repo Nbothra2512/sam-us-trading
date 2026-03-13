@@ -2,6 +2,7 @@
 // SAM (Smart Analyst for Markets) — Proprietary Software
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 import './Portfolio.css';
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
@@ -11,10 +12,175 @@ function getToken() { return localStorage.getItem('sam_token') || ''; }
 function authHeaders() { return { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' }; }
 function getWsPricesUrl() { return BACKEND.replace(/^http/, 'ws') + '/ws/prices?token=' + getToken(); }
 
-function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
+// ─── Search Popup Component ──────────────────────────────────────
+function SearchPopup({ result, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 5000);
+    const handleClick = (e) => {
+      if (!e.target.closest('.search-popup')) onClose();
+    };
+    document.addEventListener('click', handleClick);
+    return () => { clearTimeout(timer); document.removeEventListener('click', handleClick); };
+  }, [onClose]);
+
+  if (!result) return null;
+  if (result.error) {
+    return (
+      <div className="search-popup">
+        <div className="search-popup-error">{result.error}</div>
+      </div>
+    );
+  }
+
+  const isUp = (result.change || 0) >= 0;
+  return (
+    <div className="search-popup" onClick={e => e.stopPropagation()}>
+      <div className="search-popup-symbol">{result.symbol}</div>
+      <div className="search-popup-price">${result.price?.toFixed(2)}</div>
+      <div className={`search-popup-change ${isUp ? 'green' : 'red'}`}>
+        {isUp ? '+' : ''}{result.change?.toFixed(2)} ({isUp ? '+' : ''}{result.change_pct?.toFixed(2)}%)
+      </div>
+    </div>
+  );
+}
+
+// ─── P&L Mini Chart ─────────────────────────────────────────────
+function PnlChart() {
+  const [data, setData] = useState([]);
+
+  useEffect(() => {
+    try {
+      const snapshots = JSON.parse(localStorage.getItem('sam_pnl_snapshots') || '[]');
+      const chartData = snapshots.map(s => ({
+        t: s.t,
+        value: s.v,
+        pnl: Math.round((s.v - s.c) * 100) / 100,
+      }));
+      setData(chartData);
+    } catch {}
+  }, []);
+
+  if (data.length < 2) return null;
+
+  const latestPnl = data[data.length - 1]?.pnl || 0;
+  const isPositive = latestPnl >= 0;
+  const color = isPositive ? '#22c55e' : '#ef4444';
+
+  return (
+    <div className="pnl-chart-wrap">
+      <ResponsiveContainer width="100%" height={80}>
+        <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="pnlFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Tooltip
+            contentStyle={{ background: '#151c2c', border: '1px solid #1e293b', borderRadius: 6, fontSize: 11 }}
+            labelStyle={{ display: 'none' }}
+            formatter={(val) => [`$${val.toFixed(2)}`, 'P&L']}
+          />
+          <Area
+            type="monotone"
+            dataKey="pnl"
+            stroke={color}
+            strokeWidth={1.5}
+            fill="url(#pnlFill)"
+            dot={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── Watchlist Panel ────────────────────────────────────────────
+function WatchlistPanel() {
+  const [watchlist, setWatchlist] = useState([]);
+  const [expanded, setExpanded] = useState(false);
+  const [addSymbol, setAddSymbol] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const fetchWatchlist = useCallback(() => {
+    fetch(`${API_URL}/watchlist`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setWatchlist(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchWatchlist();
+    const interval = setInterval(fetchWatchlist, 30000);
+    return () => clearInterval(interval);
+  }, [fetchWatchlist]);
+
+  const addToWatchlist = () => {
+    if (!addSymbol.trim()) return;
+    setLoading(true);
+    fetch(`${API_URL}/watchlist/add`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ symbol: addSymbol.trim().toUpperCase() }),
+    })
+      .then(() => { setAddSymbol(''); fetchWatchlist(); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  const removeFromWatchlist = (symbol) => {
+    fetch(`${API_URL}/watchlist/remove`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ symbol }),
+    })
+      .then(() => fetchWatchlist())
+      .catch(() => {});
+  };
+
+  return (
+    <div className="watchlist-section">
+      <button className="watchlist-toggle" onClick={() => setExpanded(!expanded)}>
+        {expanded ? '\u25BC' : '\u25B6'} Watchlist ({watchlist.length})
+      </button>
+      {expanded && (
+        <div className="watchlist-panel">
+          <div className="watchlist-add">
+            <input
+              placeholder="Add symbol..."
+              value={addSymbol}
+              onChange={e => setAddSymbol(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addToWatchlist(); }}
+            />
+            <button onClick={addToWatchlist} disabled={loading || !addSymbol.trim()}>+</button>
+          </div>
+          {watchlist.length === 0 ? (
+            <div className="watchlist-empty">No symbols in watchlist</div>
+          ) : (
+            <div className="watchlist-items">
+              {watchlist.map(w => (
+                <div key={w.symbol} className="watchlist-item">
+                  <span className="watchlist-sym">{w.symbol}</span>
+                  <span className="watchlist-price">${(w.price || 0).toFixed(2)}</span>
+                  <span className={`watchlist-chg ${(w.change_pct || 0) >= 0 ? 'green' : 'red'}`}>
+                    {(w.change_pct || 0) >= 0 ? '+' : ''}{(w.change_pct || 0).toFixed(2)}%
+                  </span>
+                  <button className="watchlist-remove" onClick={() => removeFromWatchlist(w.symbol)}>&times;</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Portfolio Component ───────────────────────────────────
+function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleTheme }) {
   const [portfolio, setPortfolio] = useState(null);
   const [prevPrices, setPrevPrices] = useState({});
-  const [livePrices, setLivePrices] = useState({});    // Real-time streamed prices
+  const [livePrices, setLivePrices] = useState({});
   const [flashing, setFlashing] = useState({});
   const [showExtended, setShowExtended] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -22,16 +188,20 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
   const [newQty, setNewQty] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [feedStatus, setFeedStatus] = useState('connecting');
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
+
   const priceWsRef = useRef(null);
   const refreshInterval = useRef(null);
   const flashTimerRef = useRef(null);
 
-  // Fetch full portfolio data (REST — for initial load and P&L calculations)
+  // Fetch full portfolio data (REST)
   const fetchPortfolio = useCallback(() => {
     fetch(`${API_URL}/portfolio`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
-        // Price flash on REST refresh
         if (portfolio && portfolio.holdings) {
           const flashes = {};
           data.holdings.forEach(h => {
@@ -54,16 +224,13 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
       .catch(() => {});
   }, [portfolio, prevPrices]);
 
-  // ─── Real-time price WebSocket ─────────────────────────────────
+  // Real-time price WebSocket
   useEffect(() => {
     let reconnectTimer;
-
     const connectPriceWs = () => {
       const ws = new WebSocket(getWsPricesUrl());
-
       ws.onopen = () => {
         setFeedStatus('live');
-        // Subscribe to all portfolio symbols
         if (portfolio && portfolio.holdings) {
           const symbols = portfolio.holdings.map(h => h.symbol);
           if (symbols.length > 0) {
@@ -71,7 +238,6 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
           }
         }
       };
-
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -94,29 +260,24 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
               return updated;
             });
           }
-        } catch (e) { /* ignore parse errors */ }
+        } catch (e) { /* ignore */ }
       };
-
       ws.onclose = () => {
         setFeedStatus('reconnecting');
         reconnectTimer = setTimeout(connectPriceWs, 2000);
       };
-
       ws.onerror = () => {
         setFeedStatus('error');
         ws.close();
       };
-
       priceWsRef.current = ws;
     };
-
     connectPriceWs();
-
     return () => {
       clearTimeout(reconnectTimer);
       if (priceWsRef.current) priceWsRef.current.close();
     };
-  }, []); // Connect once on mount
+  }, []);
 
   // Re-subscribe when portfolio changes
   useEffect(() => {
@@ -128,21 +289,19 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
     }
   }, [portfolio?.holdings?.length]);
 
-  // REST refresh on mount + every 30s (fallback — main updates come via WebSocket)
+  // REST refresh on mount + every 30s
   useEffect(() => {
     fetchPortfolio();
     refreshInterval.current = setInterval(fetchPortfolio, 30000);
     return () => clearInterval(refreshInterval.current);
   }, []);
 
-  // Refresh when parent triggers (SAM chat added/removed a holding)
+  // Refresh when parent triggers
   useEffect(() => {
-    if (refreshKey > 0) {
-      fetchPortfolio();
-    }
+    if (refreshKey > 0) fetchPortfolio();
   }, [refreshKey]);
 
-  // Auto-show extended hours during pre-market/after-hours
+  // Auto-show extended hours
   useEffect(() => {
     if (portfolio && (portfolio.session === 'PRE-MARKET' || portfolio.session === 'AFTER-HOURS')) {
       setShowExtended(true);
@@ -184,31 +343,30 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
       .catch(() => {});
   };
 
-  // ─── Merge live streamed prices with REST data ─────────────────
+  // Search handler
+  const handleSearch = () => {
+    if (!searchQuery.trim()) return;
+    fetch(`${API_URL}/quote/${searchQuery.trim().toUpperCase()}`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : { error: `No data for ${searchQuery.toUpperCase()}` })
+      .then(data => setSearchResult(data))
+      .catch(() => setSearchResult({ error: 'Failed to fetch quote' }));
+  };
+
+  // Merge live streamed prices with REST data
   const getDisplayPrice = (holding) => {
     const liveData = livePrices[holding.symbol];
     if (liveData && liveData.price) {
-      // Recalculate P&L with live price
       const last = liveData.price;
       const market_value = Math.round(last * holding.qty * 100) / 100;
       const pl = Math.round((last - holding.buy_price) * holding.qty * 100) / 100;
       const pl_pct = holding.buy_price ? Math.round(((last - holding.buy_price) / holding.buy_price) * 10000) / 100 : 0;
       const day_chg = holding.prev_close ? Math.round((last - holding.prev_close) * 100) / 100 : holding.day_chg;
       const day_chg_pct = holding.prev_close ? Math.round(((last - holding.prev_close) / holding.prev_close) * 10000) / 100 : holding.day_chg_pct;
-
-      // Estimate bid/ask from live price
       const spread_half = Math.max(Math.round(last * 0.0001 * 100) / 100, 0.01);
       const bid = Math.round((last - spread_half) * 100) / 100;
       const ask = Math.round((last + spread_half) * 100) / 100;
       const mid = Math.round((bid + ask) / 2 * 100) / 100;
-
-      return {
-        ...holding,
-        last, bid, ask, mid,
-        market_value, pl, pl_pct,
-        day_chg, day_chg_pct,
-        prev_close: holding.prev_close,
-      };
+      return { ...holding, last, bid, ask, mid, market_value, pl, pl_pct, day_chg, day_chg_pct, prev_close: holding.prev_close };
     }
     return holding;
   };
@@ -235,10 +393,7 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
     return Math.min(spreadPct / 0.5 * 100, 100);
   };
 
-  // Compute display holdings with live prices merged
   const displayHoldings = portfolio?.holdings?.map(getDisplayPrice) || [];
-
-  // Recompute totals from live data
   const totalValue = displayHoldings.reduce((sum, h) => sum + (h.market_value || 0), 0);
   const totalCost = displayHoldings.reduce((sum, h) => sum + (h.cost_basis || 0), 0);
   const totalPl = Math.round((totalValue - totalCost) * 100) / 100;
@@ -268,6 +423,20 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
           <span className="terminal-subtitle">Live Portfolio Tracker</span>
         </div>
         <div className="terminal-controls">
+          {/* Search Bar */}
+          <div className="search-bar-wrap">
+            <input
+              className="search-bar"
+              placeholder="Search symbol..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+            />
+            <button className="search-btn" onClick={handleSearch} title="Search">&#128269;</button>
+            {searchResult && (
+              <SearchPopup result={searchResult} onClose={() => setSearchResult(null)} />
+            )}
+          </div>
           <span className={`feed-badge ${feedStatusClass}`} title={`Data feed: ${feedStatus}`}>
             {feedStatus === 'live' ? 'LIVE FEED' : feedStatus === 'connecting' ? 'CONNECTING...' : feedStatus === 'reconnecting' ? 'RECONNECTING...' : 'FEED ERROR'}
           </span>
@@ -279,11 +448,15 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
             Extended Hours
           </button>
           <button className="add-btn" onClick={() => setShowAddModal(true)}>+ Add Position</button>
+          {/* Theme Toggle */}
+          <button className="theme-toggle" onClick={onToggleTheme} title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+            {theme === 'dark' ? '\u2600' : '\uD83C\uDF19'}
+          </button>
           {onLogout && <button className="logout-btn" onClick={onLogout}>Logout</button>}
         </div>
       </div>
 
-      {/* Summary Bar */}
+      {/* Summary Bar with P&L Chart */}
       {portfolio && displayHoldings.length > 0 && (
         <div className="summary-bar">
           <div className="summary-item">
@@ -310,8 +483,15 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout }) {
             <span className="summary-label">Positions</span>
             <span className="summary-value">{displayHoldings.length}</span>
           </div>
+          <div className="summary-item summary-chart">
+            <span className="summary-label">P&L Trend</span>
+            <PnlChart />
+          </div>
         </div>
       )}
+
+      {/* Watchlist */}
+      <WatchlistPanel />
 
       {/* Main Table */}
       <div className="table-wrap">

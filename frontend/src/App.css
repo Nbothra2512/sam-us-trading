@@ -3,6 +3,7 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ─── Dark Theme (default) ──────────────────────────────────────── */
 :root {
   --bg: #0a0e17;
   --sidebar: #0f1520;
@@ -16,6 +17,32 @@
   --orange: #f59e0b;
   --user-bg: #1e3a5f;
   --assistant-bg: #1a1f2e;
+  --header-bg: #0b1018;
+  --table-hover: rgba(59,130,246,0.04);
+  --table-header-bg: #0d1117;
+  --modal-bg: #151c2c;
+  --modal-input-bg: #0d1117;
+}
+
+/* ─── Light Theme ────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg: #f1f5f9;
+  --sidebar: #e2e8f0;
+  --card: #ffffff;
+  --border: #cbd5e1;
+  --text: #1e293b;
+  --text-dim: #64748b;
+  --accent: #2563eb;
+  --green: #16a34a;
+  --red: #dc2626;
+  --orange: #d97706;
+  --user-bg: #dbeafe;
+  --assistant-bg: #f8fafc;
+  --header-bg: #e2e8f0;
+  --table-hover: rgba(37,99,235,0.04);
+  --table-header-bg: #f1f5f9;
+  --modal-bg: #ffffff;
+  --modal-input-bg: #f1f5f9;
 }
 
 body {
@@ -26,11 +53,74 @@ body {
   overflow: hidden;
 }
 
+.app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ─── Ticker Tape ────────────────────────────────────────────────── */
+.ticker-tape {
+  height: 28px;
+  background: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.ticker-scroll {
+  display: flex;
+  gap: 40px;
+  white-space: nowrap;
+  animation: ticker-slide 30s linear infinite;
+  padding: 0 20px;
+  height: 100%;
+  align-items: center;
+}
+
+.ticker-scroll:hover {
+  animation-play-state: paused;
+}
+
+@keyframes ticker-slide {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-33.33%); }
+}
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.ticker-label {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.ticker-symbol {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.ticker-price {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ticker-change {
+  font-weight: 600;
+  font-size: 11px;
+}
+
 /* Split layout — top terminal, bottom chat */
 .split-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
 }
 
 .split-top {
@@ -41,7 +131,7 @@ body {
 
 .split-divider {
   height: 28px;
-  background: #0b1018;
+  background: var(--header-bg);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -110,7 +200,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  background: #0b1018;
+  background: var(--header-bg);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -175,6 +265,85 @@ body {
 .logout-btn:hover {
   background: var(--red);
   color: white;
+}
+
+/* ─── Chat Tabs ──────────────────────────────────────────────────── */
+.chat-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  padding: 0 8px;
+  overflow-x: auto;
+}
+
+.chat-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.chat-tab:hover {
+  color: var(--text);
+  background: var(--table-hover);
+}
+
+.chat-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.chat-tab-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-tab-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+.chat-tab-close:hover {
+  color: var(--red);
+  opacity: 1;
+}
+
+.chat-tab-add {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.chat-tab-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* Chat messages */
@@ -264,12 +433,18 @@ body {
   border-radius: 3px;
   font-size: 12px;
 }
+[data-theme="light"] .message-content code {
+  background: rgba(0,0,0,0.07);
+}
 .message-content pre {
   background: rgba(0,0,0,0.3);
   padding: 10px;
   border-radius: 6px;
   overflow-x: auto;
   margin: 6px 0;
+}
+[data-theme="light"] .message-content pre {
+  background: rgba(0,0,0,0.05);
 }
 .message-content pre code { background: none; padding: 0; }
 .message-content table {
@@ -284,6 +459,7 @@ body {
   text-align: left;
 }
 .message-content th { background: rgba(0,0,0,0.2); }
+[data-theme="light"] .message-content th { background: rgba(0,0,0,0.05); }
 .message-content strong { color: var(--accent); }
 .message-content ul, .message-content ol {
   padding-left: 18px;
@@ -362,99 +538,617 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* ─── Login Page ────────────────────────────────────────────────── */
-.login-container {
+/* ─── Toast Notifications ────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  top: 36px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  cursor: pointer;
+  animation: toast-in 0.3s ease-out;
+}
+
+@keyframes toast-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.toast-alert {
+  border-left: 3px solid var(--orange);
+}
+
+.toast-earnings {
+  border-left: 3px solid var(--accent);
+}
+
+.toast-info {
+  border-left: 3px solid var(--text-dim);
+}
+
+.toast-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.toast-msg {
+  flex: 1;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.toast-close:hover {
+  color: var(--text);
+}
+
+/* ─── Fancy Login Page ──────────────────────────────────────────── */
+.login-page {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  background: var(--bg);
+  background: #030712;
+  overflow: hidden;
 }
 
-.login-box {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 40px;
-  width: 380px;
-  text-align: center;
+.login-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
 }
 
-.login-header {
-  margin-bottom: 30px;
+/* Floating orbs */
+.login-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  z-index: 0;
+  animation: orb-float 8s ease-in-out infinite;
 }
 
-.login-logo {
-  font-size: 36px;
+.orb-1 {
+  width: 400px;
+  height: 400px;
+  background: #3b82f6;
+  top: -10%;
+  right: -5%;
+  animation-delay: 0s;
+}
+
+.orb-2 {
+  width: 350px;
+  height: 350px;
+  background: #8b5cf6;
+  bottom: -10%;
+  left: -5%;
+  animation-delay: -3s;
+}
+
+.orb-3 {
+  width: 250px;
+  height: 250px;
+  background: #06b6d4;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: -6s;
+}
+
+@keyframes orb-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-30px) scale(1.05); }
+}
+
+.orb-3 {
+  animation-name: orb-float-center;
+}
+
+@keyframes orb-float-center {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) translateY(-20px) scale(1.08); }
+}
+
+/* Ticker bar at top */
+.login-ticker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  z-index: 2;
+}
+
+.login-ticker-scroll {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+  height: 100%;
+  padding: 0 20px;
+  animation: ticker-slide 40s linear infinite;
+  white-space: nowrap;
+}
+
+.login-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.login-ticker-symbol {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.login-ticker-price {
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Glassmorphism login card */
+.login-card {
+  position: relative;
+  z-index: 1;
+  width: 420px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+}
+
+.login-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.login-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-logo-icon {
+  flex-shrink: 0;
+}
+
+.login-logo-text {
+  font-size: 22px;
   font-weight: 900;
-  color: var(--accent);
+  color: #ffffff;
   letter-spacing: 2px;
 }
 
-.login-subtitle {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-top: 4px;
+.login-logo-sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 1px;
 }
 
-.login-form {
+.login-badge {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 20px;
+  font-size: 11px;
+  color: #22c55e;
+  font-weight: 500;
 }
 
-.login-field {
-  text-align: left;
+.login-badge-dot {
+  width: 6px;
+  height: 6px;
+  background: #22c55e;
+  border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
 }
 
-.login-field label {
-  display: block;
-  font-size: 12px;
-  color: var(--text-dim);
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.login-welcome h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f1f5f9;
   margin-bottom: 6px;
 }
 
-.login-field input {
-  width: 100%;
-  padding: 10px 14px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.login-field input:focus {
-  border-color: var(--accent);
-}
-
-.login-error {
-  color: var(--red);
+.login-welcome p {
   font-size: 13px;
-  text-align: left;
+  color: #64748b;
+  margin-bottom: 24px;
 }
 
-.login-btn {
-  background: var(--accent);
+/* Form */
+.login-form-new {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-input-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.login-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.login-input-wrap:focus-within {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.login-input-icon {
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.login-input-wrap input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font-size: 14px;
+  padding: 12px 0;
+  font-family: inherit;
+}
+
+.login-input-wrap input::placeholder {
+  color: #475569;
+}
+
+.login-eye-btn {
+  background: none;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.login-eye-btn:hover {
+  color: #94a3b8;
+}
+
+.login-error-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 10px;
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.login-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
   color: white;
   border: none;
-  padding: 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
+  font-family: inherit;
   margin-top: 4px;
 }
 
-.login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.login-btn:hover:not(:disabled) { opacity: 0.85; }
+.login-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
+}
 
-.login-footer {
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Stats bar */
+.login-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
   margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.login-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.login-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.login-stat-label {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.login-stat-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.login-card-footer {
+  text-align: center;
+  margin-top: 20px;
   font-size: 11px;
-  color: var(--text-dim);
-  opacity: 0.5;
+  color: #475569;
+}
+
+/* ─── Mobile Responsive ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .split-layout {
+    flex-direction: column;
+  }
+
+  .split-top,
+  .split-bottom {
+    height: auto !important;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .split-divider.draggable {
+    cursor: default;
+  }
+
+  /* Stack vertically — no drag resize on mobile */
+  .split-top {
+    max-height: 50vh;
+  }
+
+  .ticker-label {
+    display: none;
+  }
+
+  .ticker-item {
+    gap: 4px;
+  }
+
+  .chat-header {
+    padding: 6px 10px;
+  }
+
+  .chat-brand {
+    font-size: 13px;
+  }
+
+  .chat-brand span {
+    display: none;
+  }
+
+  .chat-messages {
+    padding: 8px 10px;
+  }
+
+  .chat-input {
+    padding: 8px 10px;
+  }
+
+  .chat-input textarea {
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+
+  .message {
+    max-width: 95%;
+  }
+
+  .message-content {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  .welcome-chips {
+    gap: 4px;
+  }
+
+  .welcome-chips button {
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+
+  .login-card {
+    width: 90vw;
+    padding: 24px;
+  }
+
+  .login-card-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .login-orb {
+    display: none;
+  }
+
+  /* Modal full-width */
+  .modal-overlay .modal {
+    width: 95vw;
+    max-width: 95vw;
+  }
+
+  /* Toast */
+  .toast-container {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+  }
+
+  /* Compact terminal header */
+  .terminal-header {
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .terminal-title h1 {
+    font-size: 16px;
+  }
+
+  .terminal-subtitle {
+    display: none;
+  }
+
+  .terminal-controls {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .summary-bar {
+    padding: 8px 10px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .summary-value {
+    font-size: 13px;
+  }
+
+  .summary-label {
+    font-size: 9px;
+  }
+
+  .equity-table {
+    font-size: 11px;
+  }
+
+  .equity-table th,
+  .equity-table td {
+    padding: 6px 6px;
+  }
+
+  .legend {
+    padding: 6px 10px;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 10px;
+  }
+
+  /* Search bar */
+  .search-bar {
+    width: 120px;
+  }
+
+  /* Watchlist */
+  .watchlist-panel {
+    max-height: 150px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ticker-tape {
+    font-size: 10px;
+  }
+
+  .ticker-symbol {
+    font-size: 11px;
+  }
+
+  .ticker-price,
+  .ticker-change {
+    font-size: 10px;
+  }
+
+  .terminal-controls .ext-toggle,
+  .terminal-controls .feed-badge {
+    display: none;
+  }
 }
