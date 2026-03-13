@@ -5,7 +5,7 @@
 import json
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -14,6 +14,7 @@ import market_data
 import portfolio
 import live_feed
 import historical_data
+import auth
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,8 +50,31 @@ def health():
     return {"status": "ok"}
 
 
+# ─── Auth Endpoints ───────────────────────────────────────────────
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/auth/login")
+def login(req: LoginRequest):
+    return auth.login(req.username, req.password)
+
+
+@app.get("/api/auth/verify")
+def verify_token(user=Depends(auth.require_auth)):
+    return {"valid": True, "username": user.get("sub")}
+
+
+@app.post("/api/auth/hash")
+def hash_password(req: LoginRequest):
+    """Utility endpoint to generate password hash. Remove in production if desired."""
+    return {"hash": auth.generate_password_hash(req.password)}
+
+
+# ─── Protected API Endpoints ──────────────────────────────────────
 @app.get("/api/quote/{symbol}")
-def quote(symbol: str):
+def quote(symbol: str, user=Depends(auth.require_auth)):
     try:
         return market_data.get_live_quote(symbol.upper())
     except Exception as e:
@@ -59,7 +83,7 @@ def quote(symbol: str):
 
 
 @app.get("/api/analysis/{symbol}")
-def analysis(symbol: str):
+def analysis(symbol: str, user=Depends(auth.require_auth)):
     try:
         return market_data.get_technical_analysis(symbol.upper())
     except Exception as e:
@@ -68,7 +92,7 @@ def analysis(symbol: str):
 
 
 @app.get("/api/news")
-def news(symbol: str = None, limit: int = 10):
+def news(symbol: str = None, limit: int = 10, user=Depends(auth.require_auth)):
     try:
         return market_data.get_news(symbol=symbol.upper() if symbol else None, limit=limit)
     except Exception as e:
@@ -77,7 +101,7 @@ def news(symbol: str = None, limit: int = 10):
 
 
 @app.get("/api/sentiment/{symbol}")
-def sentiment(symbol: str):
+def sentiment(symbol: str, user=Depends(auth.require_auth)):
     try:
         return market_data.get_news_sentiment(symbol.upper())
     except Exception as e:
@@ -86,7 +110,7 @@ def sentiment(symbol: str):
 
 
 @app.get("/api/portfolio")
-def get_portfolio():
+def get_portfolio(user=Depends(auth.require_auth)):
     try:
         return portfolio.get_portfolio()
     except Exception as e:
@@ -95,7 +119,7 @@ def get_portfolio():
 
 
 @app.get("/api/watchlist")
-def get_watchlist():
+def get_watchlist(user=Depends(auth.require_auth)):
     try:
         return portfolio.get_watchlist()
     except Exception as e:
@@ -104,7 +128,7 @@ def get_watchlist():
 
 
 @app.get("/api/earnings")
-def earnings_calendar(from_date: str = None, to_date: str = None):
+def earnings_calendar(from_date: str = None, to_date: str = None, user=Depends(auth.require_auth)):
     try:
         return market_data.get_earnings_calendar(from_date=from_date, to_date=to_date)
     except Exception as e:
@@ -113,7 +137,7 @@ def earnings_calendar(from_date: str = None, to_date: str = None):
 
 
 @app.get("/api/earnings/{symbol}")
-def earnings_surprises(symbol: str):
+def earnings_surprises(symbol: str, user=Depends(auth.require_auth)):
     try:
         return market_data.get_earnings_surprises(symbol.upper())
     except Exception as e:
@@ -122,7 +146,7 @@ def earnings_surprises(symbol: str):
 
 
 @app.get("/api/recommendations/{symbol}")
-def recommendations(symbol: str):
+def recommendations(symbol: str, user=Depends(auth.require_auth)):
     try:
         return market_data.get_recommendation_trends(symbol.upper())
     except Exception as e:
@@ -131,7 +155,7 @@ def recommendations(symbol: str):
 
 
 @app.get("/api/price-target/{symbol}")
-def price_target(symbol: str):
+def price_target(symbol: str, user=Depends(auth.require_auth)):
     try:
         return market_data.get_price_target(symbol.upper())
     except Exception as e:
@@ -150,7 +174,7 @@ class RemoveHoldingRequest(BaseModel):
 
 
 @app.post("/api/portfolio/add")
-async def add_holding(req: AddHoldingRequest):
+async def add_holding(req: AddHoldingRequest, user=Depends(auth.require_auth)):
     try:
         result = portfolio.add_holding(req.symbol.upper(), req.qty, req.avg_price)
         # Auto-subscribe to live feed for new symbol
@@ -162,7 +186,7 @@ async def add_holding(req: AddHoldingRequest):
 
 
 @app.post("/api/portfolio/remove")
-async def remove_holding(req: RemoveHoldingRequest):
+async def remove_holding(req: RemoveHoldingRequest, user=Depends(auth.require_auth)):
     try:
         result = portfolio.remove_holding(req.symbol.upper())
         # Unsubscribe if not in watchlist
@@ -177,7 +201,7 @@ async def remove_holding(req: RemoveHoldingRequest):
 
 # ─── Historical Data Endpoints ─────────────────────────────────────
 @app.post("/api/historical/download")
-def download_historical():
+def download_historical(user=Depends(auth.require_auth)):
     """Download 6 months of data for all 50 stocks. Takes ~30 seconds."""
     try:
         result = historical_data.download_all(months=6)
@@ -188,7 +212,7 @@ def download_historical():
 
 
 @app.get("/api/historical/status")
-def historical_status():
+def historical_status(user=Depends(auth.require_auth)):
     """Check what historical data is stored."""
     try:
         return historical_data.get_download_status()
@@ -197,7 +221,7 @@ def historical_status():
 
 
 @app.get("/api/historical/{symbol}")
-def stock_history(symbol: str, days: int = 180):
+def stock_history(symbol: str, days: int = 180, user=Depends(auth.require_auth)):
     try:
         return historical_data.get_stock_history(symbol.upper(), days)
     except Exception as e:
@@ -205,7 +229,7 @@ def stock_history(symbol: str, days: int = 180):
 
 
 @app.get("/api/historical/screen/{criteria}")
-def stock_screen(criteria: str, days: int = 30, limit: int = 10):
+def stock_screen(criteria: str, days: int = 30, limit: int = 10, user=Depends(auth.require_auth)):
     try:
         return historical_data.screen_stocks(criteria, days, limit)
     except Exception as e:
@@ -213,7 +237,7 @@ def stock_screen(criteria: str, days: int = 30, limit: int = 10):
 
 
 @app.get("/api/market-summary")
-def market_summary(days: int = 30):
+def market_summary(days: int = 30, user=Depends(auth.require_auth)):
     try:
         return historical_data.get_market_summary(days)
     except Exception as e:
@@ -222,8 +246,11 @@ def market_summary(days: int = 30):
 
 # ─── Real-time price streaming WebSocket ───────────────────────────
 @app.websocket("/ws/prices")
-async def websocket_prices(websocket: WebSocket):
+async def websocket_prices(websocket: WebSocket, token: str = ""):
     """Stream real-time price updates to frontend dashboard."""
+    if not auth.verify_ws_token(token):
+        await websocket.close(code=4001, reason="Unauthorized")
+        return
     await websocket.accept()
     live_feed.register_client(websocket)
 
@@ -248,7 +275,10 @@ async def websocket_prices(websocket: WebSocket):
 
 # ─── SAM Chat WebSocket ────────────────────────────────────────────
 @app.websocket("/ws/chat")
-async def websocket_chat(websocket: WebSocket):
+async def websocket_chat(websocket: WebSocket, token: str = ""):
+    if not auth.verify_ws_token(token):
+        await websocket.close(code=4001, reason="Unauthorized")
+        return
     await websocket.accept()
     messages = []
 

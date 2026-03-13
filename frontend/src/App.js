@@ -4,13 +4,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import Portfolio from './Portfolio';
+import Login from './Login';
 import './App.css';
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
-const WS_URL = BACKEND.replace(/^http/, 'ws') + '/ws/chat';
 const API_URL = BACKEND + '/api';
 
+function getToken() {
+  return localStorage.getItem('sam_token') || '';
+}
+
+function getWsUrl(path) {
+  const token = getToken();
+  return BACKEND.replace(/^http/, 'ws') + path + '?token=' + token;
+}
+
+function authHeaders() {
+  return { Authorization: `Bearer ${getToken()}` };
+}
+
 function App() {
+  const [token, setToken] = useState(() => localStorage.getItem('sam_token') || '');
   const [messages, setMessages] = useState(() => {
     const saved = localStorage.getItem('sam_chat');
     return saved ? JSON.parse(saved) : [];
@@ -24,10 +38,29 @@ function App() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  const handleLogout = () => {
+    localStorage.removeItem('sam_token');
+    localStorage.removeItem('sam_user');
+    setToken('');
+    wsRef.current?.close();
+  };
+
+  // Verify token on mount
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/auth/verify`, { headers: authHeaders() })
+      .then(r => { if (!r.ok) handleLogout(); })
+      .catch(() => handleLogout());
+  }, [token]);
+
   // Shared portfolio fetch — used by both terminal and chat
   const fetchPortfolio = useCallback(() => {
-    fetch(`${API_URL}/portfolio`).then(r => r.json()).then(setPortfolioData).catch(() => {});
-  }, []);
+    if (!token) return;
+    fetch(`${API_URL}/portfolio`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setPortfolioData(d))
+      .catch(() => {});
+  }, [token]);
 
   // Trigger terminal refresh from outside
   const triggerRefresh = useCallback(() => {
@@ -36,18 +69,20 @@ function App() {
   }, [fetchPortfolio]);
 
   useEffect(() => {
+    if (!token) return;
     fetchPortfolio();
-    // REST polling is now fallback only — live prices come via WebSocket
     const interval = setInterval(fetchPortfolio, 30000);
     return () => clearInterval(interval);
-  }, [fetchPortfolio]);
+  }, [fetchPortfolio, token]);
 
   useEffect(() => {
+    if (!token) return;
     const connect = () => {
-      const ws = new WebSocket(WS_URL);
+      const ws = new WebSocket(getWsUrl('/ws/chat'));
       ws.onopen = () => setConnected(true);
-      ws.onclose = () => {
+      ws.onclose = (e) => {
         setConnected(false);
+        if (e.code === 4001) { handleLogout(); return; }
         setTimeout(connect, 3000);
       };
       ws.onmessage = (event) => {
@@ -56,7 +91,6 @@ function App() {
           setIsTyping(data.status);
         } else if (data.type === 'message') {
           setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
-          // Refresh portfolio after every SAM response (might have added/removed holdings)
           triggerRefresh();
         } else if (data.type === 'error') {
           setMessages(prev => [...prev, { role: 'error', content: data.content }]);
@@ -66,7 +100,7 @@ function App() {
     };
     connect();
     return () => wsRef.current?.close();
-  }, [triggerRefresh]);
+  }, [triggerRefresh, token]);
 
   useEffect(() => {
     localStorage.setItem('sam_chat', JSON.stringify(messages));
@@ -92,6 +126,11 @@ function App() {
     }
   };
 
+  // Show login screen if not authenticated
+  if (!token) {
+    return <Login onLogin={(t) => setToken(t)} />;
+  }
+
   return (
     <div className="split-layout">
       {/* Top — uEquity Portfolio Terminal */}
@@ -113,6 +152,9 @@ function App() {
                 Clear
               </button>
             )}
+            <button className="clear-btn" onClick={handleLogout} title="Sign out">
+              Logout
+            </button>
           </div>
         </div>
 

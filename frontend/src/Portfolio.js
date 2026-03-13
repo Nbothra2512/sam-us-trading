@@ -6,7 +6,10 @@ import './Portfolio.css';
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 const API_URL = BACKEND + '/api';
-const WS_PRICES_URL = BACKEND.replace(/^http/, 'ws') + '/ws/prices';
+
+function getToken() { return localStorage.getItem('sam_token') || ''; }
+function authHeaders() { return { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' }; }
+function getWsPricesUrl() { return BACKEND.replace(/^http/, 'ws') + '/ws/prices?token=' + getToken(); }
 
 function Portfolio({ refreshKey, onPortfolioChange }) {
   const [portfolio, setPortfolio] = useState(null);
@@ -25,8 +28,8 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
 
   // Fetch full portfolio data (REST — for initial load and P&L calculations)
   const fetchPortfolio = useCallback(() => {
-    fetch(`${API_URL}/portfolio`)
-      .then(r => r.json())
+    fetch(`${API_URL}/portfolio`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
         // Price flash on REST refresh
         if (portfolio && portfolio.holdings) {
@@ -56,7 +59,7 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
     let reconnectTimer;
 
     const connectPriceWs = () => {
-      const ws = new WebSocket(WS_PRICES_URL);
+      const ws = new WebSocket(getWsPricesUrl());
 
       ws.onopen = () => {
         setFeedStatus('live');
@@ -150,7 +153,7 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
     if (!newSymbol || !newQty || !newPrice) return;
     fetch(`${API_URL}/portfolio/add`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({
         symbol: newSymbol.toUpperCase(),
         qty: parseFloat(newQty),
@@ -171,7 +174,7 @@ function Portfolio({ refreshKey, onPortfolioChange }) {
   const removePosition = (symbol) => {
     fetch(`${API_URL}/portfolio/remove`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ symbol }),
     })
       .then(() => {
