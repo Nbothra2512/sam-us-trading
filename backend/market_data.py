@@ -13,6 +13,24 @@ logger = logging.getLogger(__name__)
 fc = finnhub.Client(api_key=config.FINNHUB_API_KEY)
 
 
+def search_symbol(query: str) -> list[dict]:
+    """Search for stock symbols by company name or partial ticker."""
+    try:
+        result = fc.symbol_lookup(query)
+        matches = []
+        for item in (result.get("result") or [])[:10]:
+            if item.get("type") == "Common Stock" and "." not in item.get("symbol", ""):
+                matches.append({
+                    "symbol": item["symbol"],
+                    "name": item.get("description", ""),
+                    "type": item.get("type", ""),
+                })
+        return matches
+    except Exception as e:
+        logger.error(f"Symbol search error for '{query}': {e}")
+        return []
+
+
 def get_live_quote(symbol: str) -> dict:
     """Get real-time price for a single stock."""
     try:

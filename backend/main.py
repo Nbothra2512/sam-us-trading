@@ -73,6 +73,15 @@ def hash_password(req: LoginRequest):
 
 
 # ─── Protected API Endpoints ──────────────────────────────────────
+@app.get("/api/search/{query}")
+def search_symbols(query: str, user=Depends(auth.require_auth)):
+    try:
+        return market_data.search_symbol(query)
+    except Exception as e:
+        logger.error(f"Search error for {query}: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Search failed for {query}"})
+
+
 @app.get("/api/quote/{symbol}")
 def quote(symbol: str, user=Depends(auth.require_auth)):
     try:

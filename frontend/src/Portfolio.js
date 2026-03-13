@@ -343,13 +343,38 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
       .catch(() => {});
   };
 
-  // Search handler
-  const handleSearch = () => {
-    if (!searchQuery.trim()) return;
-    fetch(`${API_URL}/quote/${searchQuery.trim().toUpperCase()}`, { headers: authHeaders() })
-      .then(r => r.ok ? r.json() : { error: `No data for ${searchQuery.toUpperCase()}` })
-      .then(data => setSearchResult(data))
-      .catch(() => setSearchResult({ error: 'Failed to fetch quote' }));
+  // Search handler — resolves company names to ticker symbols
+  const handleSearch = async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    const hdrs = authHeaders();
+
+    // If query looks like a ticker (1-5 uppercase letters), try direct quote first
+    const looksLikeTicker = /^[A-Za-z]{1,5}$/.test(q);
+
+    if (looksLikeTicker) {
+      try {
+        const r = await fetch(`${API_URL}/quote/${q.toUpperCase()}`, { headers: hdrs });
+        const data = await r.json();
+        if (data && !data.error) { setSearchResult(data); return; }
+      } catch {}
+    }
+
+    // Otherwise, search by name and get quote for best match
+    try {
+      const sr = await fetch(`${API_URL}/search/${encodeURIComponent(q)}`, { headers: hdrs });
+      const matches = await sr.json();
+      if (Array.isArray(matches) && matches.length > 0) {
+        const symbol = matches[0].symbol;
+        setSearchQuery(symbol);
+        const r = await fetch(`${API_URL}/quote/${symbol}`, { headers: hdrs });
+        const data = await r.json();
+        if (data && !data.error) { setSearchResult(data); return; }
+      }
+      setSearchResult({ error: `No results for "${q}". Try a ticker like AAPL.` });
+    } catch {
+      setSearchResult({ error: 'Search failed' });
+    }
   };
 
   // Merge live streamed prices with REST data
