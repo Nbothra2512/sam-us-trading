@@ -186,7 +186,7 @@ function App() {
       {showPortfolio && (
         <div
           className="split-top"
-          style={panelMode === 'both' ? { height: `${splitPct}%` } : { flex: 1 }}
+          style={panelMode === 'both' ? { height: `${splitPct}%` } : { height: 'calc(100vh - 28px)' }}
         >
           <Portfolio refreshKey={refreshKey} onPortfolioChange={triggerRefresh} onLogout={handleLogout} />
         </div>
@@ -221,7 +221,7 @@ function App() {
       {showChat && (
         <div
           className="split-bottom"
-          style={panelMode === 'both' ? { height: `${100 - splitPct}%` } : { flex: 1 }}
+          style={panelMode === 'both' ? { height: `${100 - splitPct}%` } : { height: 'calc(100vh - 28px)' }}
         >
           <div className="chat-header">
             <div className="chat-brand">SAM <span>Smart Analyst for Markets</span></div>
