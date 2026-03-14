@@ -33,6 +33,19 @@ async def lifespan(app: FastAPI):
     if symbols:
         await live_feed.sync_subscriptions(symbols)
         logger.info(f"Auto-subscribed to {len(symbols)} symbols: {symbols}")
+
+    # Auto-download historical data if DB is empty (first boot / volume reset)
+    try:
+        status = historical_data.get_download_status()
+        if status.get("symbols_stored", 0) == 0:
+            logger.info("Historical DB empty — auto-downloading 51 stocks...")
+            result = historical_data.download_all(months=6)
+            logger.info(f"Auto-download complete: {result.get('success', 0)} stocks")
+        else:
+            logger.info(f"Historical DB has {status['symbols_stored']} symbols, {status['total_candles']} candles")
+    except Exception as e:
+        logger.error(f"Auto-download failed: {e}")
+
     yield
     await live_feed.stop()
 
