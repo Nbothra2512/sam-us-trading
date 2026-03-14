@@ -234,6 +234,7 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
   // Real-time price WebSocket
   useEffect(() => {
     let reconnectTimer;
+    let shouldReconnect = true;
     const connectPriceWs = () => {
       const ws = new WebSocket(getWsPricesUrl());
       ws.onopen = () => {
@@ -273,7 +274,7 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
       };
       ws.onclose = () => {
         setFeedStatus('reconnecting');
-        reconnectTimer = setTimeout(connectPriceWs, 2000);
+        if (shouldReconnect) reconnectTimer = setTimeout(connectPriceWs, 2000);
       };
       ws.onerror = () => {
         setFeedStatus('error');
@@ -283,6 +284,7 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
     };
     connectPriceWs();
     return () => {
+      shouldReconnect = false;
       clearTimeout(reconnectTimer);
       if (priceWsRef.current) priceWsRef.current.close();
     };
@@ -318,6 +320,7 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
 
   const addPosition = () => {
     if (!newSymbol || !newQty || !newPrice) return;
+    if (parseFloat(newQty) <= 0 || parseFloat(newPrice) <= 0) return;
     fetch(`${API_URL}/portfolio/add`, {
       method: 'POST',
       headers: authHeaders(),
@@ -327,7 +330,9 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
         avg_price: parseFloat(newPrice),
       }),
     })
-      .then(() => {
+      .then(res => {
+        if (res.status === 401 && onLogout) { onLogout(); return; }
+        if (!res.ok) throw new Error('Failed to add position');
         setShowAddModal(false);
         setNewSymbol('');
         setNewQty('');
@@ -335,7 +340,7 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
         fetchPortfolio();
         if (onPortfolioChange) onPortfolioChange();
       })
-      .catch(() => {});
+      .catch((e) => { if (e.message) console.error(e.message); });
   };
 
   const removePosition = (symbol) => {
@@ -344,11 +349,13 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
       headers: authHeaders(),
       body: JSON.stringify({ symbol }),
     })
-      .then(() => {
+      .then(res => {
+        if (res.status === 401 && onLogout) { onLogout(); return; }
+        if (!res.ok) throw new Error('Failed to remove position');
         fetchPortfolio();
         if (onPortfolioChange) onPortfolioChange();
       })
-      .catch(() => {});
+      .catch((e) => { if (e.message) console.error(e.message); });
   };
 
   // Search handler — resolves company names to ticker symbols

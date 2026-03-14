@@ -224,6 +224,7 @@ function App() {
   const [panelMode, setPanelMode] = useState('both');
   const [mobileTab, setMobileTab] = useState('portfolio');
   const [splitPct, setSplitPct] = useState(50);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const isDragging = useRef(false);
 
   const wsRef = useRef(null);
@@ -245,6 +246,14 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('sam_theme', theme);
   }, [theme]);
+
+  // Track mobile/desktop to avoid dual-mounting Portfolio
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -338,13 +347,14 @@ function App() {
 
   useEffect(() => {
     if (!token) return;
+    let shouldReconnect = true;
     const connect = () => {
       const ws = new WebSocket(getWsUrl('/ws/chat'));
       ws.onopen = () => setConnected(true);
       ws.onclose = (e) => {
         setConnected(false);
         if (e.code === 4001) { handleLogout(); return; }
-        setTimeout(connect, 3000);
+        if (shouldReconnect) setTimeout(connect, 3000);
       };
       ws.onmessage = (event) => {
         try {
@@ -362,7 +372,10 @@ function App() {
       wsRef.current = ws;
     };
     connect();
-    return () => wsRef.current?.close();
+    return () => {
+      shouldReconnect = false;
+      wsRef.current?.close();
+    };
   }, [triggerRefresh, token, handleLogout]);
 
   // Persist messages for active tab
@@ -482,6 +495,7 @@ function App() {
       <TickerTape />
 
       {/* Desktop split layout */}
+      {!isMobile && (
       <div className="split-layout desktop-layout" ref={layoutRef}>
         {/* Top — uEquity Portfolio Terminal */}
         {showPortfolio && (
@@ -543,8 +557,10 @@ function App() {
           </div>
         )}
       </div>
+      )}
 
       {/* Mobile layout — tab-based switching */}
+      {isMobile && (
       <div className="mobile-layout">
         <div className="mobile-content">
           {mobileTab === 'portfolio' && (
@@ -597,6 +613,7 @@ function App() {
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

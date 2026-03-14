@@ -4,6 +4,7 @@
 """FastAPI server — WebSocket chat + REST endpoints + real-time price streaming."""
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,9 +38,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Market Agent", lifespan=lifespan)
 
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -214,6 +216,8 @@ class RemoveHoldingRequest(BaseModel):
 @app.post("/api/portfolio/add")
 async def add_holding(req: AddHoldingRequest, user=Depends(auth.require_auth)):
     try:
+        if req.qty <= 0 or req.avg_price <= 0:
+            return JSONResponse(status_code=400, content={"error": "Quantity and price must be positive"})
         result = portfolio.add_holding(req.symbol.upper(), req.qty, req.avg_price)
         # Auto-subscribe to live feed for new symbol
         await live_feed.subscribe(req.symbol.upper())
@@ -318,6 +322,10 @@ async def whatsapp_webhook(request: Request):
     # Empty TwiML response — we reply via the API, not TwiML
     twiml_empty = Response(content="<Response/>", media_type="application/xml")
 
+    if not whatsapp.is_allowed(from_number):
+        logger.warning(f"WhatsApp blocked — {from_number} not in allowlist")
+        return twiml_empty
+
     # Handle special commands
     if body.lower() in ("clear", "reset", "new chat"):
         whatsapp.clear_conversation(from_number)
@@ -329,8 +337,9 @@ async def whatsapp_webhook(request: Request):
 
     # Route through SAM AI agent
     try:
-        messages = whatsapp.get_conversation(from_number)
-        response = await agent.chat(messages)
+        # Build a fresh messages list — agent.chat() mutates it with Anthropic content blocks
+        chat_messages = [{"role": m["role"], "content": m["content"]} for m in whatsapp.get_conversation(from_number)]
+        response = await agent.chat(chat_messages)
         whatsapp.add_message(from_number, "assistant", response)
         whatsapp.send_message(from_number, response)
     except Exception as e:
@@ -386,6 +395,7 @@ async def websocket_chat(websocket: WebSocket, token: str = ""):
         return
     await websocket.accept()
     messages = []
+    MAX_MESSAGES = 50  # Keep context manageable
 
     try:
         while True:
@@ -398,6 +408,9 @@ async def websocket_chat(websocket: WebSocket, token: str = ""):
             user_text = user_msg.get("message", "")
 
             messages.append({"role": "user", "content": user_text})
+            # Trim to prevent unbounded growth
+            if len(messages) > MAX_MESSAGES:
+                messages = messages[-MAX_MESSAGES:]
             await websocket.send_text(json.dumps({"type": "typing", "status": True}))
 
             try:

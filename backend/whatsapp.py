@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER", "")
+ALLOWED_NUMBERS = [n.strip() for n in os.getenv("TWILIO_ALLOWED_NUMBERS", "").split(",") if n.strip()]
 
 # Initialize Twilio client
 client: Client | None = None
@@ -34,6 +35,13 @@ MAX_HISTORY = 20  # Keep last 20 messages per user
 def is_enabled() -> bool:
     """Check if WhatsApp integration is configured."""
     return client is not None and bool(WHATSAPP_NUMBER)
+
+
+def is_allowed(phone: str) -> bool:
+    """Check if phone number is in allowlist. If no allowlist set, allow all (sandbox mode)."""
+    if not ALLOWED_NUMBERS:
+        return True  # No allowlist = sandbox mode, allow all
+    return phone in ALLOWED_NUMBERS
 
 
 def validate_request(url: str, params: dict, signature: str) -> bool:
