@@ -24,21 +24,51 @@ DAILY_DIR = DATA_DIR / "daily"
 INTRADAY_DIR = DATA_DIR / "intraday_1min"
 PATTERN_DB = Path(__file__).parent.parent / "data" / "patterns.db"
 
+# SQLite fallback (Railway has historical.db with 51 stocks × 6 months)
+HISTORICAL_DB = Path(__file__).parent.parent / "data" / "historical.db"
+
 
 # ─── Data Loading ─────────────────────────────────────────────────
 
+def _load_from_sqlite(symbol: str, days: int = 0) -> pd.DataFrame:
+    """Fallback: load daily data from historical.db SQLite (used on Railway)."""
+    if not HISTORICAL_DB.exists():
+        return pd.DataFrame()
+    try:
+        conn = sqlite3.connect(str(HISTORICAL_DB))
+        if days > 0:
+            query = f"SELECT date, open, high, low, close, volume FROM candles WHERE symbol = ? ORDER BY date DESC LIMIT ?"
+            df = pd.read_sql_query(query, conn, params=(symbol, days))
+        else:
+            query = f"SELECT date, open, high, low, close, volume FROM candles WHERE symbol = ? ORDER BY date"
+            df = pd.read_sql_query(query, conn, params=(symbol,))
+        conn.close()
+        if df.empty:
+            return df
+        df["date"] = pd.to_datetime(df["date"])
+        df.sort_values("date", inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        return df
+    except Exception as e:
+        logger.warning(f"SQLite load for {symbol}: {e}")
+        return pd.DataFrame()
+
+
 def load_daily(symbol: str, days: int = 0) -> pd.DataFrame:
-    """Load daily OHLCV data for a symbol from CSV."""
+    """Load daily OHLCV data — tries CSV first, falls back to SQLite (Railway)."""
+    # Try CSV files first (local dev with full 10-year data)
     safe = symbol.replace(".", "_")
     filepath = DAILY_DIR / f"{safe}.csv"
-    if not filepath.exists():
-        return pd.DataFrame()
-    df = pd.read_csv(filepath, parse_dates=["date"])
-    df.sort_values("date", inplace=True)
-    df.reset_index(drop=True, inplace=True)
-    if days > 0:
-        df = df.tail(days).reset_index(drop=True)
-    return df
+    if filepath.exists():
+        df = pd.read_csv(filepath, parse_dates=["date"])
+        df.sort_values("date", inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        if days > 0:
+            df = df.tail(days).reset_index(drop=True)
+        return df
+
+    # Fallback to SQLite (Railway deployment)
+    return _load_from_sqlite(symbol, days)
 
 
 def load_intraday(symbol: str) -> pd.DataFrame:
@@ -53,11 +83,28 @@ def load_intraday(symbol: str) -> pd.DataFrame:
     return df
 
 
-def get_available_symbols() -> list:
-    """List all symbols with daily data."""
-    if not DAILY_DIR.exists():
+def _get_sqlite_symbols() -> list:
+    """Get symbols available in historical.db."""
+    if not HISTORICAL_DB.exists():
         return []
-    return sorted([f.stem.replace("_", ".") for f in DAILY_DIR.glob("*.csv")])
+    try:
+        conn = sqlite3.connect(str(HISTORICAL_DB))
+        rows = conn.execute("SELECT DISTINCT symbol FROM candles").fetchall()
+        conn.close()
+        return sorted([r[0] for r in rows])
+    except Exception:
+        return []
+
+
+def get_available_symbols() -> list:
+    """List all symbols with daily data — CSV files or SQLite."""
+    csv_symbols = []
+    if DAILY_DIR.exists():
+        csv_symbols = [f.stem.replace("_", ".") for f in DAILY_DIR.glob("*.csv")]
+    sqlite_symbols = _get_sqlite_symbols()
+    # Merge both sources, deduplicate
+    all_symbols = sorted(set(csv_symbols + sqlite_symbols))
+    return all_symbols if all_symbols else sqlite_symbols
 
 
 # ─── Candlestick Pattern Detection ───────────────────────────────
