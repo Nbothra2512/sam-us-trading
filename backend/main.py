@@ -15,6 +15,7 @@ import portfolio
 import live_feed
 import historical_data
 import auth
+import whatsapp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -289,6 +290,60 @@ def earnings_pattern(symbol: str, quarters: int = 4, user=Depends(auth.require_a
     except Exception as e:
         logger.error(f"Earnings pattern error for {symbol}: {e}")
         return JSONResponse(status_code=500, content={"error": f"Failed to analyze earnings pattern for {symbol}"})
+
+
+# ─── WhatsApp Webhook (Twilio) ─────────────────────────────────────
+@app.post("/api/whatsapp/webhook")
+async def whatsapp_webhook(request: Request):
+    """Receive incoming WhatsApp messages from Twilio, route through SAM AI agent."""
+    if not whatsapp.is_enabled():
+        return JSONResponse(status_code=503, content={"error": "WhatsApp not configured"})
+
+    form = await request.form()
+    params = dict(form)
+
+    # Validate Twilio signature
+    signature = request.headers.get("X-Twilio-Signature", "")
+    url = str(request.url)
+    if not whatsapp.validate_request(url, params, signature):
+        logger.warning("Invalid Twilio signature on WhatsApp webhook")
+        return JSONResponse(status_code=403, content={"error": "Invalid signature"})
+
+    # Extract message details
+    from_number = params.get("From", "").replace("whatsapp:", "")
+    body = params.get("Body", "").strip()
+
+    if not body:
+        return {"status": "empty"}
+
+    logger.info(f"WhatsApp from {from_number}: {body[:100]}")
+
+    # Handle special commands
+    if body.lower() in ("clear", "reset", "new chat"):
+        whatsapp.clear_conversation(from_number)
+        whatsapp.send_message(from_number, "Chat cleared. How can I help you?")
+        return {"status": "cleared"}
+
+    # Add user message to conversation history
+    whatsapp.add_message(from_number, "user", body)
+
+    # Route through SAM AI agent
+    try:
+        messages = whatsapp.get_conversation(from_number)
+        response = await agent.chat(messages)
+        whatsapp.add_message(from_number, "assistant", response)
+        whatsapp.send_message(from_number, response)
+    except Exception as e:
+        logger.error(f"WhatsApp agent error: {e}")
+        whatsapp.send_message(from_number, "Sorry, I encountered an error. Please try again.")
+
+    return {"status": "ok"}
+
+
+@app.get("/api/whatsapp/status")
+def whatsapp_status(user=Depends(auth.require_auth)):
+    """Check if WhatsApp integration is active."""
+    return {"enabled": whatsapp.is_enabled(), "number": whatsapp.WHATSAPP_NUMBER}
 
 
 # ─── Real-time price streaming WebSocket ───────────────────────────

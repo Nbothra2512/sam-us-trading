@@ -6,3 +6,4 @@ pandas==2.2.2
 ta==0.11.0
 python-dotenv==1.0.1
 finnhub-python==2.4.20
+twilio==9.4.0
