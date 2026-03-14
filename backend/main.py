@@ -298,13 +298,18 @@ def earnings_pattern(symbol: str, quarters: int = 4, user=Depends(auth.require_a
 
 
 # ─── Pattern Recognition Endpoints ────────────────────────────────
-@app.get("/api/patterns/{symbol}")
-def stock_patterns(symbol: str, days: int = 252, user=Depends(auth.require_auth)):
-    """Full pattern recognition scan for a single stock."""
+# NOTE: Specific routes MUST come before {symbol} wildcard
+
+@app.get("/api/patterns/portfolio")
+def portfolio_patterns(user=Depends(auth.require_auth)):
+    """Run pattern analysis on all portfolio holdings."""
     try:
-        return pattern_engine.scan_stock_patterns(symbol.upper(), days)
+        import portfolio as port
+        data = port._load()
+        symbols = [h["symbol"] for h in data.get("holdings", [])]
+        return pattern_engine.analyze_portfolio_patterns(symbols)
     except Exception as e:
-        logger.error(f"Pattern scan error for {symbol}: {e}")
+        logger.error(f"Portfolio pattern analysis error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -328,16 +333,13 @@ def backtest(symbol: str, user=Depends(auth.require_auth)):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@app.get("/api/patterns/portfolio")
-def portfolio_patterns(user=Depends(auth.require_auth)):
-    """Run pattern analysis on all portfolio holdings."""
+@app.get("/api/patterns/{symbol}")
+def stock_patterns(symbol: str, days: int = 252, user=Depends(auth.require_auth)):
+    """Full pattern recognition scan for a single stock."""
     try:
-        import portfolio as port
-        data = port._load()
-        symbols = [h["symbol"] for h in data.get("holdings", [])]
-        return pattern_engine.analyze_portfolio_patterns(symbols)
+        return pattern_engine.scan_stock_patterns(symbol.upper(), days)
     except Exception as e:
-        logger.error(f"Portfolio pattern analysis error: {e}")
+        logger.error(f"Pattern scan error for {symbol}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
