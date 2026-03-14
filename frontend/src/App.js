@@ -4,6 +4,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import Portfolio from './Portfolio';
+import Analysis from './Analysis';
+import NewsFeed from './NewsFeed';
 import Login from './Login';
 import ToastContainer, { showToast } from './Toast';
 import './App.css';
@@ -158,7 +160,8 @@ function ChatPanel({ messages, setMessages, input, setInput, isTyping, connected
               <button onClick={() => setInput("What's NVDA trading at?")}>NVDA Price</button>
               <button onClick={() => setInput('News sentiment on TSLA')}>TSLA Sentiment</button>
               <button onClick={() => setInput('Analyze AAPL technicals')}>Analyze AAPL</button>
-              <button onClick={() => setInput('Add 10 shares of AAPL at $180 to my portfolio')}>Add AAPL</button>
+              <button onClick={() => setInput('Scan AAPL for patterns and support/resistance')}>AAPL Patterns</button>
+              <button onClick={() => setInput('Scan the market for oversold stocks and breakouts')}>Market Scan</button>
               <button onClick={() => setInput('Show my portfolio')}>My Portfolio</button>
             </div>
           </div>
@@ -222,6 +225,8 @@ function App() {
 
   // Panel state: 'both', 'portfolio', 'chat'
   const [panelMode, setPanelMode] = useState('both');
+  const [topView, setTopView] = useState('portfolio'); // 'portfolio', 'analysis', 'news'
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [mobileTab, setMobileTab] = useState('portfolio');
   const [splitPct, setSplitPct] = useState(50);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -246,6 +251,44 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('sam_theme', theme);
   }, [theme]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyboard = (e) => {
+      // Ignore when typing in input/textarea
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+      const key = e.key.toLowerCase();
+
+      if (key === '/') {
+        e.preventDefault();
+        const searchBar = document.querySelector('.search-bar');
+        if (searchBar) searchBar.focus();
+      } else if (key === 'p') {
+        if (isMobile) setMobileTab('portfolio');
+        else { setTopView('portfolio'); setPanelMode('both'); }
+      } else if (key === 'a') {
+        if (isMobile) setMobileTab('analysis');
+        else { setTopView('analysis'); setPanelMode('both'); }
+      } else if (key === 'n') {
+        if (isMobile) setMobileTab('news');
+        else { setTopView('news'); setPanelMode('both'); }
+      } else if (key === 'c') {
+        if (isMobile) setMobileTab('chat');
+        else {
+          setPanelMode('both');
+          setTimeout(() => desktopInputRef.current?.focus(), 100);
+        }
+      } else if (key === 'escape') {
+        setShowShortcuts(false);
+        setPanelMode('both');
+      } else if (key === '?') {
+        setShowShortcuts(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyboard);
+    return () => window.removeEventListener('keydown', handleKeyboard);
+  }, [isMobile]);
 
   // Track mobile/desktop to avoid dual-mounting Portfolio
   useEffect(() => {
@@ -497,19 +540,61 @@ function App() {
       {/* Desktop split layout */}
       {!isMobile && (
       <div className="split-layout desktop-layout" ref={layoutRef}>
-        {/* Top — uEquity Portfolio Terminal */}
+        {/* Top — uEquity Portfolio / Analysis */}
         {showPortfolio && (
           <div
             className="split-top"
             style={panelMode === 'both' ? { height: `calc(${splitPct}% - 14px)` } : { height: 'calc(100vh - 56px)' }}
           >
-            <Portfolio
-              refreshKey={refreshKey}
-              onPortfolioChange={triggerRefresh}
-              onLogout={handleLogout}
-              theme={theme}
-              onToggleTheme={toggleTheme}
-            />
+            {/* View switcher tabs */}
+            <div className="top-view-tabs">
+              <button
+                className={`top-view-tab ${topView === 'portfolio' ? 'active' : ''}`}
+                onClick={() => setTopView('portfolio')}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 3v18h18" /><path d="M7 16l4-8 4 4 4-6" />
+                </svg>
+                Portfolio
+              </button>
+              <button
+                className={`top-view-tab ${topView === 'analysis' ? 'active' : ''}`}
+                onClick={() => setTopView('analysis')}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+                  <path d="M8 11h6" /><path d="M11 8v6" />
+                </svg>
+                Analysis
+              </button>
+              <button
+                className={`top-view-tab ${topView === 'news' ? 'active' : ''}`}
+                onClick={() => setTopView('news')}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2" />
+                  <path d="M18 14h-8" /><path d="M15 18h-5" /><path d="M10 6h8v4h-8z" />
+                </svg>
+                News
+              </button>
+              <div className="top-view-spacer" />
+              <button
+                className="shortcuts-btn"
+                onClick={() => setShowShortcuts(prev => !prev)}
+                title="Keyboard shortcuts (?)"
+              >?</button>
+            </div>
+            {topView === 'portfolio' && (
+              <Portfolio
+                refreshKey={refreshKey}
+                onPortfolioChange={triggerRefresh}
+                onLogout={handleLogout}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+              />
+            )}
+            {topView === 'analysis' && <Analysis refreshKey={refreshKey} />}
+            {topView === 'news' && <NewsFeed />}
           </div>
         )}
 
@@ -574,6 +659,16 @@ function App() {
               />
             </div>
           )}
+          {mobileTab === 'analysis' && (
+            <div className="mobile-panel">
+              <Analysis refreshKey={refreshKey} />
+            </div>
+          )}
+          {mobileTab === 'news' && (
+            <div className="mobile-panel">
+              <NewsFeed />
+            </div>
+          )}
           {mobileTab === 'chat' && (
             <div className="mobile-panel mobile-chat-panel">
               <ChatPanel
@@ -602,6 +697,25 @@ function App() {
             <span>Portfolio</span>
           </button>
           <button
+            className={`mobile-nav-btn ${mobileTab === 'analysis' ? 'active' : ''}`}
+            onClick={() => setMobileTab('analysis')}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+              <path d="M8 11h6" /><path d="M11 8v6" />
+            </svg>
+            <span>Analysis</span>
+          </button>
+          <button
+            className={`mobile-nav-btn ${mobileTab === 'news' ? 'active' : ''}`}
+            onClick={() => setMobileTab('news')}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2" />
+            </svg>
+            <span>News</span>
+          </button>
+          <button
             className={`mobile-nav-btn ${mobileTab === 'chat' ? 'active' : ''}`}
             onClick={() => setMobileTab('chat')}
           >
@@ -613,6 +727,27 @@ function App() {
           </button>
         </div>
       </div>
+      )}
+
+      {/* Keyboard Shortcuts Tooltip */}
+      {showShortcuts && (
+        <div className="shortcuts-overlay" onClick={() => setShowShortcuts(false)}>
+          <div className="shortcuts-panel" onClick={e => e.stopPropagation()}>
+            <div className="shortcuts-header">
+              <h3>Keyboard Shortcuts</h3>
+              <button className="shortcuts-close" onClick={() => setShowShortcuts(false)}>&times;</button>
+            </div>
+            <div className="shortcuts-list">
+              <div className="shortcut-item"><kbd>/</kbd><span>Focus search</span></div>
+              <div className="shortcut-item"><kbd>P</kbd><span>Portfolio view</span></div>
+              <div className="shortcut-item"><kbd>A</kbd><span>Analysis view</span></div>
+              <div className="shortcut-item"><kbd>N</kbd><span>News feed</span></div>
+              <div className="shortcut-item"><kbd>C</kbd><span>Chat / Focus input</span></div>
+              <div className="shortcut-item"><kbd>?</kbd><span>Toggle this help</span></div>
+              <div className="shortcut-item"><kbd>Esc</kbd><span>Close modal / Reset panels</span></div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

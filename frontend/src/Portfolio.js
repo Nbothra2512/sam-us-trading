@@ -488,6 +488,19 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
             Extended Hours
           </button>
           <button className="add-btn" onClick={() => setShowAddModal(true)}>+ Add Position</button>
+          <button className="export-btn" onClick={() => {
+            fetch(`${API_URL}/reports/portfolio-pdf`, { headers: authHeaders() })
+              .then(r => r.blob())
+              .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'sam-portfolio-report.pdf';
+                a.click();
+                URL.revokeObjectURL(url);
+              })
+              .catch(() => {});
+          }} title="Download PDF Report">PDF</button>
           {/* Theme Toggle */}
           <button className="theme-toggle" onClick={onToggleTheme} title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
             {theme === 'dark' ? '\u2600' : '\uD83C\uDF19'}

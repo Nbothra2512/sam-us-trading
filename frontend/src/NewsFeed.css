@@ -1,0 +1,189 @@
+/* Copyright (c) 2026 Smart Touch Infotech Private Limited. All rights reserved. */
+/* SAM (Smart Analyst for Markets) — News Feed Styles */
+
+.news-panel {
+  height: 100%;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+.news-header { margin-bottom: 10px; }
+
+.news-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.news-title-row h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.news-overall {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.news-overall.bullish { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.news-overall.bearish { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.news-overall.neutral { background: rgba(100, 116, 139, 0.15); color: #94a3b8; }
+
+.news-sentiment-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+}
+.news-sent-item { color: var(--text-dim); }
+.news-sent-item.pos { color: #22c55e; }
+.news-sent-item.neg { color: #ef4444; }
+.news-sent-item.neu { color: #94a3b8; }
+
+.news-refresh {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 11px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.news-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── Filters ─────────────────────────────────────────────────── */
+.news-filters {
+  display: flex;
+  gap: 0;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.news-filter {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.news-filter:hover { color: var(--text); }
+.news-filter.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ─── News List ───────────────────────────────────────────────── */
+.news-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.news-loading, .news-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.news-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text);
+  border-left: 3px solid transparent;
+  transition: background 0.15s;
+}
+.news-item:hover { background: var(--card); }
+.news-positive { border-left-color: #22c55e; }
+.news-negative { border-left-color: #ef4444; }
+.news-neutral { border-left-color: var(--border); }
+
+.news-item-left {
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+
+.news-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.news-dot.positive { background: #22c55e; box-shadow: 0 0 4px rgba(34, 197, 94, 0.4); }
+.news-dot.negative { background: #ef4444; box-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+.news-dot.neutral { background: #64748b; }
+
+.news-item-body { flex: 1; min-width: 0; }
+
+.news-headline {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.news-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.news-source {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.news-time {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.news-ticker {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--border);
+  color: var(--text);
+}
+.news-ticker-portfolio {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+}
+.news-portfolio-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+
+/* ─── Mobile ──────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .news-panel { padding: 8px; }
+  .news-filters { overflow-x: auto; }
+  .news-headline { font-size: 12px; }
+}

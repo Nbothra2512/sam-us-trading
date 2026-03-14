@@ -151,6 +151,57 @@ def _get_full_quote(symbol: str) -> dict:
         }
 
 
+def _get_pattern_alert(symbol: str) -> dict | None:
+    """Run quick pattern scan when user buys/sells a stock."""
+    try:
+        import pattern_engine
+        result = pattern_engine.scan_stock_patterns(symbol, days=252)
+        if "error" in result:
+            return None
+
+        alert = {
+            "symbol": symbol,
+            "overall_signal": result.get("overall_signal", "NEUTRAL"),
+            "signal_detail": result.get("signal_detail", ""),
+        }
+
+        # Add trend info
+        trend = result.get("trend", {})
+        if isinstance(trend, dict) and "trend" in trend:
+            alert["trend"] = trend["trend"]
+            alert["trend_score"] = trend.get("trend_score", 0)
+
+        # Add key warnings
+        warnings = []
+        mr = result.get("mean_reversion", {})
+        if mr.get("signal") in ("sell", "strong_sell"):
+            warnings.append(f"OVERBOUGHT — RSI {mr.get('rsi', '?')}")
+        if mr.get("signal") in ("buy", "strong_buy"):
+            warnings.append(f"OVERSOLD — RSI {mr.get('rsi', '?')}")
+
+        for cp in result.get("chart_patterns", []):
+            if cp.get("strength") in ("strong", "very strong"):
+                warnings.append(f"{cp['pattern']}: {cp.get('description', '')}")
+
+        bo = result.get("breakout", {})
+        if bo.get("breakout"):
+            warnings.append(f"BREAKOUT {bo['direction'].upper()} — {bo.get('description', '')}")
+
+        sr = result.get("support_resistance", {})
+        if sr.get("support"):
+            nearest = sr["support"][0]
+            warnings.append(f"Nearest support: ${nearest['level']} ({nearest['distance_pct']}% below)")
+        if sr.get("resistance"):
+            nearest = sr["resistance"][0]
+            warnings.append(f"Nearest resistance: ${nearest['level']} ({nearest['distance_pct']}% above)")
+
+        alert["warnings"] = warnings
+        return alert
+    except Exception as e:
+        logger.warning(f"Pattern alert for {symbol}: {e}")
+        return None
+
+
 def add_holding(symbol: str, qty: float, avg_price: float) -> dict:
     data = _load()
     for h in data["holdings"]:
@@ -161,18 +212,30 @@ def add_holding(symbol: str, qty: float, avg_price: float) -> dict:
             )
             h["qty"] = total_qty
             _save(data)
-            return {"status": "updated", "holding": h}
+            result = {"status": "updated", "holding": h}
+            alert = _get_pattern_alert(symbol)
+            if alert:
+                result["pattern_alert"] = alert
+            return result
     holding = {"symbol": symbol, "qty": qty, "avg_price": avg_price}
     data["holdings"].append(holding)
     _save(data)
-    return {"status": "added", "holding": holding}
+    result = {"status": "added", "holding": holding}
+    alert = _get_pattern_alert(symbol)
+    if alert:
+        result["pattern_alert"] = alert
+    return result
 
 
 def remove_holding(symbol: str) -> dict:
     data = _load()
     data["holdings"] = [h for h in data["holdings"] if h["symbol"] != symbol]
     _save(data)
-    return {"status": "removed", "symbol": symbol}
+    result = {"status": "removed", "symbol": symbol}
+    alert = _get_pattern_alert(symbol)
+    if alert:
+        result["pattern_alert"] = alert
+    return result
 
 
 def get_portfolio() -> dict:

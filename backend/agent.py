@@ -8,6 +8,7 @@ import config
 import market_data
 import portfolio
 import historical_data
+import pattern_engine
 
 client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
@@ -776,6 +777,39 @@ TOOLS = [
             "required": ["symbol"],
         },
     },
+    {
+        "name": "scan_stock_patterns",
+        "description": "PATTERN RECOGNITION — Full technical pattern analysis for a single stock using up to 10 years of daily data. Detects: candlestick patterns (doji, hammer, engulfing, morning star, evening star, three white soldiers, three black crows, marubozu, shooting star), chart patterns (double top/bottom, head & shoulders, ascending/descending triangles), support/resistance levels, trend analysis (MA crossovers, ADX, golden/death cross), breakout detection, and mean reversion signals (Bollinger Bands, RSI, Z-score). Returns an overall BULLISH/BEARISH/NEUTRAL/MIXED signal.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock ticker (e.g. AAPL, TSLA, NVDA)"},
+                "days": {"type": "integer", "description": "Lookback period in trading days (default 252 = 1 year, max ~2500 = 10 years)"},
+            },
+            "required": ["symbol"],
+        },
+    },
+    {
+        "name": "scan_market_patterns",
+        "description": "MARKET-WIDE PATTERN SCAN — Scans all 483 S&P 500 stocks for active technical patterns. Finds: stocks with bullish/bearish candlestick patterns, breakouts from consolidation, oversold stocks (low RSI + Bollinger Band), overbought stocks. Great for finding trading opportunities across the entire market.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max results per category (default 20)"},
+            },
+        },
+    },
+    {
+        "name": "backtest_patterns",
+        "description": "PATTERN BACKTESTING — Tests how reliable candlestick patterns have been for a specific stock using its full 10-year history. For each pattern type found, shows: number of occurrences, average return after 1/5/10/20 days, and win rate. Proves whether patterns actually worked in the past for this specific stock.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock ticker (e.g. AAPL, TSLA, NVDA)"},
+            },
+            "required": ["symbol"],
+        },
+    },
 ]
 
 TOOL_HANDLERS = {
@@ -808,6 +842,15 @@ TOOL_HANDLERS = {
     "get_market_summary": lambda args: historical_data.get_market_summary(args.get("days", 30)),
     "analyze_earnings_pattern": lambda args: historical_data.analyze_earnings_pattern(
         args["symbol"].upper(), args.get("quarters", 4)
+    ),
+    "scan_stock_patterns": lambda args: pattern_engine.scan_stock_patterns(
+        args["symbol"].upper(), args.get("days", 252)
+    ),
+    "scan_market_patterns": lambda args: pattern_engine.scan_market_patterns(
+        args.get("limit", 20)
+    ),
+    "backtest_patterns": lambda args: pattern_engine.backtest_patterns(
+        args["symbol"].upper()
     ),
 }
 

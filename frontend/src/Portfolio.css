@@ -120,6 +120,20 @@
 }
 .add-btn:hover { opacity: 0.85; }
 
+.export-btn {
+  background: none;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+}
+.export-btn:hover { background: var(--accent); color: white; }
+
 .logout-btn {
   background: none;
   border: 1px solid var(--red);
