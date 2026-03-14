@@ -89,7 +89,7 @@ function TickerTape() {
   );
 }
 
-// ─── Chat Tabs Logic ────────────────────────────────────────────
+// ─── Chat Tabs Logic (server-side + localStorage fallback) ──────
 function loadChatTabs() {
   try {
     const saved = localStorage.getItem('sam_chat_tabs');
@@ -100,6 +100,22 @@ function loadChatTabs() {
 
 function saveChatTabs(tabs) {
   localStorage.setItem('sam_chat_tabs', JSON.stringify(tabs));
+  // Async save to server
+  fetch(`${API_URL}/userdata/chat`, {
+    method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tabs, history: _getAllLocalHistory(tabs) }),
+  }).catch(() => {});
+}
+
+function _getAllLocalHistory(tabs) {
+  const history = {};
+  (tabs || []).forEach(t => {
+    try {
+      const msgs = localStorage.getItem(`sam_chat_${t.id}`);
+      if (msgs) history[t.id] = JSON.parse(msgs);
+    } catch {}
+  });
+  return history;
 }
 
 function loadTabMessages(tabId) {
@@ -112,6 +128,44 @@ function loadTabMessages(tabId) {
 
 function saveTabMessages(tabId, messages) {
   localStorage.setItem(`sam_chat_${tabId}`, JSON.stringify(messages));
+  // Async save to server
+  fetch(`${API_URL}/userdata/chat/${tabId}`, {
+    method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: messages.slice(-200) }),
+  }).catch(() => {});
+}
+
+// Sync from server on login (populates localStorage from server data)
+async function syncFromServer() {
+  try {
+    const r = await fetch(`${API_URL}/userdata/chat`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.tabs && data.tabs.length > 0) {
+      localStorage.setItem('sam_chat_tabs', JSON.stringify(data.tabs));
+    }
+    if (data.history) {
+      for (const [tabId, msgs] of Object.entries(data.history)) {
+        if (msgs && msgs.length > 0) {
+          localStorage.setItem(`sam_chat_${tabId}`, JSON.stringify(msgs));
+        }
+      }
+    }
+    // Sync preferences
+    const pr = await fetch(`${API_URL}/userdata/preferences`, { headers: authHeaders() });
+    if (pr.ok) {
+      const prefs = await pr.json();
+      if (prefs.theme) localStorage.setItem('sam_theme', prefs.theme);
+    }
+    // Sync P&L snapshots
+    const pnl = await fetch(`${API_URL}/userdata/pnl`, { headers: authHeaders() });
+    if (pnl.ok) {
+      const snapshots = await pnl.json();
+      if (Array.isArray(snapshots) && snapshots.length > 0) {
+        localStorage.setItem('sam_pnl_snapshots', JSON.stringify(snapshots));
+      }
+    }
+  } catch {}
 }
 
 // ─── Chat Panel (shared between desktop and mobile) ─────────────
@@ -299,7 +353,15 @@ function App() {
   }, []);
 
   const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    setTheme(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      // Save to server
+      fetch(`${API_URL}/userdata/preferences`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: next }),
+      }).catch(() => {});
+      return next;
+    });
   };
 
   const handleLogout = useCallback(() => {
@@ -309,11 +371,23 @@ function App() {
     wsRef.current?.close();
   }, []);
 
-  // Verify token on mount
+  // Verify token on mount + sync data from server
   useEffect(() => {
     if (!token) return;
     fetch(`${API_URL}/auth/verify`, { headers: authHeaders() })
-      .then(r => { if (!r.ok) handleLogout(); })
+      .then(r => {
+        if (!r.ok) { handleLogout(); return; }
+        // Sync chat history, preferences, P&L from server
+        syncFromServer().then(() => {
+          // Reload state from now-populated localStorage
+          const tabs = loadChatTabs();
+          setChatTabs(tabs);
+          setActiveTab(tabs[0]?.id || 'general');
+          setMessages(loadTabMessages(tabs[0]?.id || 'general'));
+          const savedTheme = localStorage.getItem('sam_theme');
+          if (savedTheme) setTheme(savedTheme);
+        });
+      })
       .catch(() => handleLogout());
   }, [token, handleLogout]);
 
@@ -365,9 +439,15 @@ function App() {
               const snapshots = JSON.parse(localStorage.getItem('sam_pnl_snapshots') || '[]');
               const now = Date.now();
               if (snapshots.length === 0 || now - snapshots[snapshots.length - 1].t > 300000) {
-                snapshots.push({ t: now, v: Math.round(totalVal * 100) / 100, c: Math.round(totalCost * 100) / 100 });
+                const snap = { t: now, v: Math.round(totalVal * 100) / 100, c: Math.round(totalCost * 100) / 100 };
+                snapshots.push(snap);
                 if (snapshots.length > 200) snapshots.splice(0, snapshots.length - 200);
                 localStorage.setItem('sam_pnl_snapshots', JSON.stringify(snapshots));
+                // Save to server
+                fetch(`${API_URL}/userdata/pnl`, {
+                  method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                  body: JSON.stringify(snap),
+                }).catch(() => {});
               }
             } catch {}
           }

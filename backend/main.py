@@ -18,6 +18,7 @@ import historical_data
 import auth
 import whatsapp
 import pattern_engine
+import user_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -354,6 +355,63 @@ def stock_patterns(symbol: str, days: int = 252, user=Depends(auth.require_auth)
     except Exception as e:
         logger.error(f"Pattern scan error for {symbol}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# ─── User Data (server-side storage) ──────────────────────────────
+@app.get("/api/userdata/chat")
+def get_chat_data(user=Depends(auth.require_auth)):
+    """Get all chat tabs + history."""
+    return user_data.get_all_chat_data()
+
+
+@app.post("/api/userdata/chat")
+def save_chat_data(request_data: dict, user=Depends(auth.require_auth)):
+    """Save all chat tabs + history."""
+    user_data.save_all_chat_data(
+        request_data.get("tabs", []),
+        request_data.get("history", {}),
+    )
+    return {"status": "saved"}
+
+
+@app.post("/api/userdata/chat/{tab_id}")
+def save_tab_messages(tab_id: str, request_data: dict, user=Depends(auth.require_auth)):
+    """Save messages for a single tab."""
+    user_data.save_chat_history(tab_id, request_data.get("messages", []))
+    return {"status": "saved"}
+
+
+@app.delete("/api/userdata/chat/{tab_id}")
+def delete_tab(tab_id: str, user=Depends(auth.require_auth)):
+    """Delete a chat tab's history."""
+    user_data.delete_chat_history(tab_id)
+    return {"status": "deleted"}
+
+
+@app.get("/api/userdata/preferences")
+def get_prefs(user=Depends(auth.require_auth)):
+    """Get user preferences (theme, etc.)."""
+    return user_data.get_preferences()
+
+
+@app.post("/api/userdata/preferences")
+def save_prefs(prefs: dict, user=Depends(auth.require_auth)):
+    """Save user preferences."""
+    user_data.save_preferences(prefs)
+    return {"status": "saved"}
+
+
+@app.get("/api/userdata/pnl")
+def get_pnl(user=Depends(auth.require_auth)):
+    """Get P&L snapshots."""
+    return user_data.get_pnl_snapshots()
+
+
+@app.post("/api/userdata/pnl")
+def save_pnl(request_data: dict, user=Depends(auth.require_auth)):
+    """Save a P&L snapshot."""
+    user_data.save_pnl_snapshot(request_data)
+    return {"status": "saved"}
 
 
 # ─── News Feed ────────────────────────────────────────────────────
