@@ -531,34 +531,39 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
         <table className="equity-table">
           <thead>
             <tr className="group-header">
-              <th colSpan="4" className="group-position">POSITION</th>
-              <th colSpan="4" className="group-quote">LIVE QUOTE</th>
-              <th colSpan="2" className="group-day">DAY</th>
-              {showExtended && <th colSpan="4" className="group-extended">EXTENDED HOURS</th>}
-              <th colSpan="3" className="group-pl">P & L</th>
+              <th colSpan="1" className="group-position">POSITION</th>
+              <th colSpan="3" className="group-position hide-mobile">POSITION</th>
+              <th colSpan="1" className="group-quote">QUOTE</th>
+              <th colSpan="3" className="group-quote hide-mobile">QUOTE</th>
+              <th className="group-day hide-mobile">DAY</th>
+              <th className="group-day">DAY</th>
+              {showExtended && <th colSpan="4" className="group-extended hide-mobile">EXTENDED</th>}
+              <th className="group-pl hide-mobile">P&L</th>
+              <th className="group-pl hide-mobile">P&L</th>
+              <th className="group-pl">P&L</th>
               <th className="group-action"></th>
             </tr>
             <tr className="col-header">
               <th className="left">SYMBOL</th>
-              <th>QTY</th>
-              <th>BUY PRICE</th>
-              <th>COST BASIS</th>
+              <th className="hide-mobile">QTY</th>
+              <th className="hide-mobile">BUY</th>
+              <th className="hide-mobile">COST</th>
               <th>LAST</th>
-              <th className="bid-col">BID</th>
-              <th className="ask-col">ASK</th>
-              <th>MID</th>
-              <th>CHG $</th>
+              <th className="bid-col hide-mobile">BID</th>
+              <th className="ask-col hide-mobile">ASK</th>
+              <th className="hide-mobile">MID</th>
+              <th className="hide-mobile">CHG $</th>
               <th>CHG %</th>
               {showExtended && (
                 <>
-                  <th>PRE $</th>
-                  <th>PRE %</th>
-                  <th>AH $</th>
-                  <th>AH %</th>
+                  <th className="hide-mobile">PRE $</th>
+                  <th className="hide-mobile">PRE %</th>
+                  <th className="hide-mobile">AH $</th>
+                  <th className="hide-mobile">AH %</th>
                 </>
               )}
-              <th>MKT VALUE</th>
-              <th>P&L $</th>
+              <th className="hide-mobile">MKT VAL</th>
+              <th className="hide-mobile">P&L $</th>
               <th>P&L %</th>
               <th></th>
             </tr>
@@ -572,19 +577,19 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
                       <div className="symbol-name">{h.symbol}</div>
                       <div className="company-name">{h.name}</div>
                     </td>
-                    <td>{h.qty}</td>
-                    <td>${fmt(h.buy_price)}</td>
-                    <td>${fmt(h.cost_basis)}</td>
+                    <td className="hide-mobile">{h.qty}</td>
+                    <td className="hide-mobile">${fmt(h.buy_price)}</td>
+                    <td className="hide-mobile">${fmt(h.cost_basis)}</td>
                     <td className={`last-cell ${flashing[h.symbol] || ''}`}>${fmt(h.last)}</td>
-                    <td className="bid-cell">${fmt(h.bid)}</td>
-                    <td className="ask-cell">${fmt(h.ask)}</td>
-                    <td className="mid-cell">
+                    <td className="bid-cell hide-mobile">${fmt(h.bid)}</td>
+                    <td className="ask-cell hide-mobile">${fmt(h.ask)}</td>
+                    <td className="mid-cell hide-mobile">
                       <div>${fmt(h.mid)}</div>
                       <div className="spread-bar-wrap" title={`Spread: $${h.spread_dollar} (${h.spread_pct}%)`}>
                         <div className="spread-bar" style={{ width: `${spreadBarWidth(h.spread_pct)}%` }}></div>
                       </div>
                     </td>
-                    <td className={h.day_chg >= 0 ? 'green' : 'red'}>
+                    <td className={`hide-mobile ${h.day_chg >= 0 ? 'green' : 'red'}`}>
                       {h.day_chg >= 0 ? '+$' : '-$'}{fmt(Math.abs(h.day_chg))}
                     </td>
                     <td className={h.day_chg_pct >= 0 ? 'green' : 'red'}>
@@ -592,18 +597,18 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
                     </td>
                     {showExtended && (
                       <>
-                        <td>{h.pre_price != null ? `$${fmt(h.pre_price)}` : '\u2014'}</td>
-                        <td className={h.pre_pct != null ? (h.pre_pct >= 0 ? 'green' : 'red') : ''}>
+                        <td className="hide-mobile">{h.pre_price != null ? `$${fmt(h.pre_price)}` : '\u2014'}</td>
+                        <td className={`hide-mobile ${h.pre_pct != null ? (h.pre_pct >= 0 ? 'green' : 'red') : ''}`}>
                           {h.pre_pct != null ? fmtPctSign(h.pre_pct) : '\u2014'}
                         </td>
-                        <td>{h.ah_price != null ? `$${fmt(h.ah_price)}` : '\u2014'}</td>
-                        <td className={h.ah_pct != null ? (h.ah_pct >= 0 ? 'green' : 'red') : ''}>
+                        <td className="hide-mobile">{h.ah_price != null ? `$${fmt(h.ah_price)}` : '\u2014'}</td>
+                        <td className={`hide-mobile ${h.ah_pct != null ? (h.ah_pct >= 0 ? 'green' : 'red') : ''}`}>
                           {h.ah_pct != null ? fmtPctSign(h.ah_pct) : '\u2014'}
                         </td>
                       </>
                     )}
-                    <td className="bold">${fmt(h.market_value)}</td>
-                    <td className={`bold ${h.pl >= 0 ? 'green' : 'red'}`}>{fmtDollarSign(h.pl)}</td>
+                    <td className="bold hide-mobile">${fmt(h.market_value)}</td>
+                    <td className={`bold hide-mobile ${h.pl >= 0 ? 'green' : 'red'}`}>{fmtDollarSign(h.pl)}</td>
                     <td className={`bold ${h.pl_pct >= 0 ? 'green' : 'red'}`}>{fmtPctSign(h.pl_pct)}</td>
                     <td>
                       <button className="remove-btn" onClick={() => removePosition(h.symbol)} title="Remove">x</button>
@@ -612,18 +617,21 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
                 ))}
                 {/* TOTALS row */}
                 <tr className="totals-row">
-                  <td colSpan={showExtended ? 14 : 10} className="totals-label">
-                    TOTALS &middot; {displayHoldings.length} POSITIONS &middot; Portfolio Summary
+                  <td colSpan={showExtended ? 14 : 10} className="totals-label hide-mobile">
+                    TOTALS &middot; {displayHoldings.length} POSITIONS
                   </td>
-                  <td className="bold">${fmt(totalValue)}</td>
-                  <td className={`bold ${totalPl >= 0 ? 'green' : 'red'}`}>{fmtDollarSign(totalPl)}</td>
+                  <td className="totals-label show-mobile-only" colSpan="2">
+                    {displayHoldings.length} POS
+                  </td>
+                  <td className="bold hide-mobile">${fmt(totalValue)}</td>
+                  <td className={`bold hide-mobile ${totalPl >= 0 ? 'green' : 'red'}`}>{fmtDollarSign(totalPl)}</td>
                   <td className={`bold ${totalPlPct >= 0 ? 'green' : 'red'}`}>{fmtPctSign(totalPlPct)}</td>
                   <td></td>
                 </tr>
               </>
             ) : (
               <tr>
-                <td colSpan={showExtended ? 18 : 14} className="empty-msg">
+                <td colSpan="100" className="empty-msg">
                   No positions yet. Click "+ Add Position" or tell SAM to add one.
                 </td>
               </tr>
