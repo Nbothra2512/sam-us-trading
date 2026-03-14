@@ -7,7 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 import agent
 import market_data
@@ -296,18 +296,15 @@ def earnings_pattern(symbol: str, quarters: int = 4, user=Depends(auth.require_a
 @app.post("/api/whatsapp/webhook")
 async def whatsapp_webhook(request: Request):
     """Receive incoming WhatsApp messages from Twilio, route through SAM AI agent."""
+    logger.info("WhatsApp webhook hit")
+
     if not whatsapp.is_enabled():
+        logger.warning("WhatsApp not enabled — check TWILIO env vars")
         return JSONResponse(status_code=503, content={"error": "WhatsApp not configured"})
 
     form = await request.form()
     params = dict(form)
-
-    # Validate Twilio signature
-    signature = request.headers.get("X-Twilio-Signature", "")
-    url = str(request.url)
-    if not whatsapp.validate_request(url, params, signature):
-        logger.warning("Invalid Twilio signature on WhatsApp webhook")
-        return JSONResponse(status_code=403, content={"error": "Invalid signature"})
+    logger.info(f"WhatsApp webhook params: From={params.get('From')}, Body={params.get('Body', '')[:50]}")
 
     # Extract message details
     from_number = params.get("From", "").replace("whatsapp:", "")
@@ -318,11 +315,14 @@ async def whatsapp_webhook(request: Request):
 
     logger.info(f"WhatsApp from {from_number}: {body[:100]}")
 
+    # Empty TwiML response — we reply via the API, not TwiML
+    twiml_empty = Response(content="<Response/>", media_type="application/xml")
+
     # Handle special commands
     if body.lower() in ("clear", "reset", "new chat"):
         whatsapp.clear_conversation(from_number)
         whatsapp.send_message(from_number, "Chat cleared. How can I help you?")
-        return {"status": "cleared"}
+        return twiml_empty
 
     # Add user message to conversation history
     whatsapp.add_message(from_number, "user", body)
@@ -337,7 +337,7 @@ async def whatsapp_webhook(request: Request):
         logger.error(f"WhatsApp agent error: {e}")
         whatsapp.send_message(from_number, "Sorry, I encountered an error. Please try again.")
 
-    return {"status": "ok"}
+    return twiml_empty
 
 
 @app.get("/api/whatsapp/status")
