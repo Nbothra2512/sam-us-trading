@@ -38,7 +38,13 @@ async def _connect_finnhub():
 
     while _running:
         try:
-            async with websockets.connect(url, ping_interval=30, ping_timeout=10) as ws:
+            async with websockets.connect(
+                url,
+                ping_interval=20,
+                ping_timeout=20,
+                close_timeout=10,
+                max_size=2**20,  # 1MB max message
+            ) as ws:
                 _finnhub_ws = ws
                 backoff = 2  # Reset on successful connection
                 logger.info("Finnhub WebSocket connected")
@@ -46,27 +52,34 @@ async def _connect_finnhub():
                 # Re-subscribe all symbols
                 for sym in SUBSCRIBED:
                     await ws.send(json.dumps({"type": "subscribe", "symbol": sym}))
-                    logger.info(f"Subscribed to {sym}")
+                logger.info(f"Subscribed to {len(SUBSCRIBED)} symbols")
 
                 async for message in ws:
                     try:
                         data = json.loads(message)
                         if data.get("type") == "trade" and data.get("data"):
                             await _process_trades(data["data"])
+                        elif data.get("type") == "ping":
+                            # Respond to Finnhub's ping with pong
+                            await ws.send(json.dumps({"type": "pong"}))
                     except json.JSONDecodeError:
                         continue
                     except Exception as e:
                         logger.error(f"Trade processing error: {e}")
 
-        except websockets.exceptions.ConnectionClosed:
-            logger.warning(f"Finnhub WebSocket disconnected, reconnecting in {backoff}s...")
+        except websockets.exceptions.ConnectionClosedOK:
+            logger.info("Finnhub WebSocket closed normally")
+        except websockets.exceptions.ConnectionClosedError as e:
+            logger.warning(f"Finnhub WebSocket disconnected (code={e.code}), reconnecting in {backoff}s...")
+        except asyncio.TimeoutError:
+            logger.warning(f"Finnhub WebSocket timeout, reconnecting in {backoff}s...")
         except Exception as e:
             logger.error(f"Finnhub WebSocket error: {e}")
 
         _finnhub_ws = None
         if _running:
             await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 60)  # Exponential backoff, max 60s
+            backoff = min(backoff * 2, 30)  # Exponential backoff, max 30s
 
 
 async def _process_trades(trades: list):

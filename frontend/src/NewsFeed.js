@@ -25,14 +25,27 @@ function timeAgo(isoStr) {
 function NewsFeed() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all'); // all, portfolio, positive, negative
 
   const fetchNews = useCallback(() => {
     setLoading(true);
+    setError(null);
     fetch(`${API_URL}/news-feed`, { headers: authHeaders() })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(r => {
+        if (!r.ok) throw new Error(`API error (${r.status})`);
+        return r.json();
+      })
+      .then(d => {
+        if (d?.error) throw new Error(d.error);
+        setData(d);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('News feed error:', err);
+        setError(err.message || 'Failed to load news');
+        setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -92,7 +105,12 @@ function NewsFeed() {
         {loading && !data && (
           <div className="news-loading">Loading news feed...</div>
         )}
-        {filtered.length === 0 && !loading && (
+        {error && (
+          <div className="news-empty" style={{ color: '#ff6b6b' }}>
+            {error} — <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={fetchNews}>Retry</span>
+          </div>
+        )}
+        {!error && filtered.length === 0 && !loading && (
           <div className="news-empty">No news articles found</div>
         )}
         {filtered.map((article, i) => (

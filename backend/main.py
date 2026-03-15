@@ -445,10 +445,17 @@ def news_feed(user=Depends(auth.require_auth)):
         all_news = []
         seen_headlines = set()
 
-        # Portfolio stock news
-        for sym in symbols[:10]:  # Limit to avoid rate limits
+        # Fetch all news in parallel (portfolio stocks + general market)
+        from concurrent.futures import ThreadPoolExecutor
+        news_symbols = symbols[:10]
+        with ThreadPoolExecutor(max_workers=min(len(news_symbols) + 1, 8)) as pool:
+            sym_futures = {sym: pool.submit(market_data.get_news, symbol=sym, limit=5) for sym in news_symbols}
+            general_future = pool.submit(market_data.get_news, limit=15)
+
+        # Process portfolio stock news
+        for sym in news_symbols:
             try:
-                articles = market_data.get_news(symbol=sym, limit=5)
+                articles = sym_futures[sym].result()
                 for a in articles:
                     if a["headline"] in seen_headlines:
                         continue
@@ -461,12 +468,13 @@ def news_feed(user=Depends(auth.require_auth)):
                         "portfolio_related": True,
                         "symbol": sym,
                     })
-            except Exception:
+            except Exception as e:
+                logger.warning(f"News fetch failed for {sym}: {e}")
                 continue
 
-        # General market news
+        # Process general market news
         try:
-            general = market_data.get_news(limit=15)
+            general = general_future.result()
             for a in general:
                 if a["headline"] in seen_headlines:
                     continue
@@ -479,8 +487,8 @@ def news_feed(user=Depends(auth.require_auth)):
                     "portfolio_related": False,
                     "symbol": a.get("related", ""),
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"General news fetch failed: {e}")
 
         # Sort by datetime descending
         all_news.sort(key=lambda x: x.get("datetime", ""), reverse=True)

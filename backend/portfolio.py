@@ -42,6 +42,8 @@ Calculations (from uEquity spec):
 import json
 import logging
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import finnhub
 import config
 from datetime import datetime
@@ -52,6 +54,10 @@ fc = finnhub.Client(api_key=config.FINNHUB_API_KEY)
 
 PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "portfolio.json")
 NAMES_CACHE = {}
+
+# Quote cache: {symbol: {"data": {...}, "ts": timestamp}}
+QUOTE_CACHE = {}
+QUOTE_CACHE_TTL = 15  # seconds — avoid re-fetching within 15s
 
 
 def _load() -> dict:
@@ -108,11 +114,32 @@ def _get_company_name(symbol: str) -> str:
 
 def _get_full_quote(symbol: str) -> dict:
     """Get quote with bid/ask from Finnhub.
+    Uses live WebSocket price if available, falls back to REST API with caching.
     Quote fields: c=current, o=open, h=high, l=low, pc=prev close, d=change, dp=change%
     Bid/ask estimated from spread around last price for liquid stocks.
     """
     try:
+        # Check quote cache first
+        cached = QUOTE_CACHE.get(symbol)
+        if cached and (time.time() - cached["ts"]) < QUOTE_CACHE_TTL:
+            return cached["data"]
+
         q = fc.quote(symbol)
+
+        # Use live WebSocket price if fresher than REST quote
+        try:
+            import live_feed
+            live = live_feed.get_live_price(symbol)
+            if live and live.get("price"):
+                q["c"] = live["price"]
+                # Recalculate day change from live price
+                pc = q.get("pc", 0) or 0
+                if pc:
+                    q["d"] = round(live["price"] - pc, 4)
+                    q["dp"] = round(((live["price"] - pc) / pc) * 100, 4)
+        except Exception:
+            pass  # Live feed not available, use REST quote as-is
+
         last = q.get("c", 0) or 0
         prev_close = q.get("pc", 0) or 0
         day_chg = q.get("d", 0) or 0
@@ -128,7 +155,7 @@ def _get_full_quote(symbol: str) -> dict:
         spread_dollar = round(ask - bid, 2)
         spread_pct = round((spread_dollar / mid) * 100, 4) if mid else 0
 
-        return {
+        result = {
             "last": last,
             "bid": bid,
             "ask": ask,
@@ -142,6 +169,8 @@ def _get_full_quote(symbol: str) -> dict:
             "high": q.get("h", 0),
             "low": q.get("l", 0),
         }
+        QUOTE_CACHE[symbol] = {"data": result, "ts": time.time()}
+        return result
     except Exception as e:
         logger.error(f"_get_full_quote({symbol}): {e}")
         return {
@@ -258,9 +287,17 @@ def get_portfolio() -> dict:
     total_value = 0
     total_cost = 0
 
+    # Fetch all quotes + names in parallel (major speedup: 10s → ~1-2s)
+    symbols = [h["symbol"] for h in data["holdings"]]
+    with ThreadPoolExecutor(max_workers=min(len(symbols) * 2, 10)) as pool:
+        quote_futures = {sym: pool.submit(_get_full_quote, sym) for sym in symbols}
+        name_futures = {sym: pool.submit(_get_company_name, sym) for sym in symbols}
+    quotes = {sym: f.result() for sym, f in quote_futures.items()}
+    names = {sym: f.result() for sym, f in name_futures.items()}
+
     for h in data["holdings"]:
-        q = _get_full_quote(h["symbol"])
-        name = _get_company_name(h["symbol"])
+        q = quotes[h["symbol"]]
+        name = names[h["symbol"]]
 
         # POSITION group
         cost_basis = round(h["avg_price"] * h["qty"], 2)
@@ -371,10 +408,14 @@ def get_watchlist() -> list[dict]:
     data = _load()
     if not data.get("watchlist"):
         return []
+    # Fetch all watchlist quotes in parallel
+    watchlist = data["watchlist"]
+    with ThreadPoolExecutor(max_workers=min(len(watchlist), 10)) as pool:
+        futures = {sym: pool.submit(_get_full_quote, sym) for sym in watchlist}
     results = []
-    for sym in data["watchlist"]:
+    for sym in watchlist:
         try:
-            q = _get_full_quote(sym)
+            q = futures[sym].result()
             results.append({
                 "symbol": sym,
                 "price": q["last"],
