@@ -3,6 +3,7 @@
 
 """WhatsApp integration via Twilio — receive messages, route through SAM AI agent, reply."""
 import os
+import re
 import logging
 from twilio.rest import Client
 from twilio.request_validator import RequestValidator
@@ -74,6 +75,9 @@ def send_message(to: str, body: str) -> str | None:
         return None
 
     try:
+        # Convert markdown to WhatsApp format
+        body = md_to_whatsapp(body)
+
         # Truncate if over WhatsApp limit (1600 chars)
         if len(body) > 1600:
             body = body[:1570] + "\n\n_(truncated)_"
@@ -88,6 +92,99 @@ def send_message(to: str, body: str) -> str | None:
     except Exception as e:
         logger.error(f"WhatsApp send error to {to}: {e}")
         return None
+
+
+def md_to_whatsapp(text: str) -> str:
+    """Convert markdown formatting to WhatsApp-compatible formatting.
+
+    Markdown → WhatsApp:
+      **bold** or __bold__  → *bold*
+      *italic* or _italic_  → _italic_
+      ~~strike~~            → ~strike~
+      `code`                → `code`
+      ```code block```      → ```code block```
+      # Header              → *Header*
+      ## Header             → *Header*
+      ### Header            → *Header*
+      [text](url)           → text (url)
+      ![alt](url)           → (removed)
+      | table |             → plain text rows
+      ---                   → (removed)
+    """
+    if not text:
+        return text
+
+    lines = text.split("\n")
+    result = []
+    in_code_block = False
+    in_table = False
+    table_rows = []
+
+    for line in lines:
+        # Toggle code blocks — pass through as-is
+        if line.strip().startswith("```"):
+            if in_code_block:
+                in_code_block = False
+                result.append("```")
+            else:
+                in_code_block = True
+                result.append("```")
+            continue
+
+        if in_code_block:
+            result.append(line)
+            continue
+
+        # Table handling
+        if "|" in line and line.strip().startswith("|"):
+            stripped = line.strip()
+            # Skip separator rows (|---|---|)
+            if re.match(r"^\|[\s\-:|]+\|$", stripped):
+                continue
+            # Parse table cells
+            cells = [c.strip() for c in stripped.split("|")]
+            cells = [c for c in cells if c]  # remove empty from leading/trailing |
+            if not in_table:
+                in_table = True
+                # First row is header — bold it
+                result.append("*" + " | ".join(cells) + "*")
+            else:
+                result.append(" | ".join(cells))
+            continue
+        else:
+            in_table = False
+
+        # Remove horizontal rules
+        if re.match(r"^[\s]*[-*_]{3,}[\s]*$", line):
+            continue
+
+        # Headers → bold
+        line = re.sub(r"^#{1,6}\s+(.+)$", r"*\1*", line)
+
+        # Images → remove
+        line = re.sub(r"!\[([^\]]*)\]\([^)]+\)", "", line)
+
+        # Links [text](url) → text (url)
+        line = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", line)
+
+        # Bold: **text** or __text__ → *text*
+        line = re.sub(r"\*\*(.+?)\*\*", r"*\1*", line)
+        line = re.sub(r"__(.+?)__", r"*\1*", line)
+
+        # Italic: standalone _text_ is already WhatsApp-compatible
+        # But markdown *text* (single) needs → _text_ (only if not already bold)
+        # Avoid converting * that are part of bold *...*
+        # Single *text* that isn't bold → _text_
+        line = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"_\1_", line)
+
+        # Strikethrough: ~~text~~ → ~text~
+        line = re.sub(r"~~(.+?)~~", r"~\1~", line)
+
+        # Blockquote: > text → > text (already supported in WhatsApp)
+
+        result.append(line)
+
+    return "\n".join(result).strip()
 
 
 def clear_conversation(phone: str):
