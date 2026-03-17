@@ -27,13 +27,19 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start live price feed on server startup, stop on shutdown."""
-    await live_feed.start()
-    # Auto-subscribe to all portfolio + watchlist symbols
+    # Pre-load portfolio + watchlist symbols BEFORE connecting WebSocket
+    # This avoids a race where the WS connects with 0 symbols and gets dropped (code 1006)
     data = portfolio._load()
     symbols = [h["symbol"] for h in data.get("holdings", [])] + data.get("watchlist", [])
     if symbols:
-        await live_feed.sync_subscriptions(symbols)
-        logger.info(f"Auto-subscribed to {len(symbols)} symbols: {symbols}")
+        for s in symbols:
+            live_feed.SUBSCRIBED.add(s.upper())
+        logger.info(f"Pre-loaded {len(symbols)} symbols for live feed: {symbols}")
+    else:
+        # Always subscribe to at least SPY to keep the connection alive
+        live_feed.SUBSCRIBED.add("SPY")
+        logger.info("No portfolio symbols — subscribed to SPY as heartbeat")
+    await live_feed.start()
 
     # Auto-download historical data if DB is empty (first boot / volume reset)
     try:
