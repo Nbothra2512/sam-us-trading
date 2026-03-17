@@ -128,7 +128,7 @@ async def _process_trades(trades: list):
                 await client.send_text(msg)
             except Exception:
                 dead.add(client)
-        CLIENTS -= dead
+        CLIENTS.difference_update(dead)
 
 
 async def subscribe(symbol: str):
