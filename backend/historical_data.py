@@ -15,7 +15,8 @@ import config
 logger = logging.getLogger(__name__)
 fc = finnhub.Client(api_key=config.FINNHUB_API_KEY)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "historical.db")
+DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
+DB_PATH = os.path.join(DATA_DIR, "historical.db")
 
 # Top 50 US stocks across sectors
 STOCK_UNIVERSE = {

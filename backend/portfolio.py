@@ -52,7 +52,8 @@ logger = logging.getLogger(__name__)
 
 fc = finnhub.Client(api_key=config.FINNHUB_API_KEY)
 
-PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "portfolio.json")
+DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
+PORTFOLIO_FILE = os.path.join(DATA_DIR, "portfolio.json")
 NAMES_CACHE = {}
 
 # Quote cache: {symbol: {"data": {...}, "ts": timestamp}}

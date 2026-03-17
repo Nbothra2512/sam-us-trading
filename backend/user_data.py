@@ -11,7 +11,8 @@ import os
 
 logger = logging.getLogger(__name__)
 
-DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "user_data.json")
+DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
+DATA_FILE = os.path.join(DATA_DIR, "user_data.json")
 
 
 def _load() -> dict:

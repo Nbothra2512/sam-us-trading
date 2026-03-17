@@ -22,10 +22,11 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).parent.parent / "US Market Data"
 DAILY_DIR = DATA_DIR / "daily"
 INTRADAY_DIR = DATA_DIR / "intraday_1min"
-PATTERN_DB = Path(__file__).parent.parent / "data" / "patterns.db"
+_DATA_DIR = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent.parent / "data")))
+PATTERN_DB = _DATA_DIR / "patterns.db"
 
 # SQLite fallback (Railway has historical.db with 51 stocks × 6 months)
-HISTORICAL_DB = Path(__file__).parent.parent / "data" / "historical.db"
+HISTORICAL_DB = _DATA_DIR / "historical.db"
 
 
 # ─── Data Loading ─────────────────────────────────────────────────
