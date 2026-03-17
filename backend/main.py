@@ -761,10 +761,10 @@ def whatsapp_status(user=Depends(auth.require_auth)):
 @app.websocket("/ws/prices")
 async def websocket_prices(websocket: WebSocket, token: str = ""):
     """Stream real-time price updates to frontend dashboard."""
+    await websocket.accept()
     if not auth.verify_ws_token(token):
         await websocket.close(code=4001, reason="Unauthorized")
         return
-    await websocket.accept()
     live_feed.register_client(websocket)
 
     try:
@@ -792,10 +792,10 @@ async def websocket_prices(websocket: WebSocket, token: str = ""):
 # ─── SAM Chat WebSocket ────────────────────────────────────────────
 @app.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket, token: str = ""):
+    await websocket.accept()
     if not auth.verify_ws_token(token):
         await websocket.close(code=4001, reason="Unauthorized")
         return
-    await websocket.accept()
     messages = []
     MAX_MESSAGES = 50  # Keep context manageable
 

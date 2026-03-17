@@ -272,7 +272,8 @@ function Portfolio({ refreshKey, onPortfolioChange, onLogout, theme, onToggleThe
           }
         } catch (e) { /* ignore */ }
       };
-      ws.onclose = () => {
+      ws.onclose = (e) => {
+        if (e.code === 4001 && onLogout) { onLogout(); return; }
         setFeedStatus('reconnecting');
         if (shouldReconnect) reconnectTimer = setTimeout(connectPriceWs, 2000);
       };
