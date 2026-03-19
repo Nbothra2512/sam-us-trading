@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import ta
 import config
+from cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 fc = finnhub.Client(api_key=config.FINNHUB_API_KEY)
@@ -16,6 +17,9 @@ fc = finnhub.Client(api_key=config.FINNHUB_API_KEY)
 def search_symbol(query: str) -> list[dict]:
     """Search for stock symbols by company name or partial ticker."""
     try:
+        cached = cache_get("search", query)
+        if cached is not None:
+            return cached
         result = fc.symbol_lookup(query)
         matches = []
         for item in (result.get("result") or [])[:10]:
@@ -25,6 +29,7 @@ def search_symbol(query: str) -> list[dict]:
                     "name": item.get("description", ""),
                     "type": item.get("type", ""),
                 })
+        cache_set("search", matches, 600, query)
         return matches
     except Exception as e:
         logger.error(f"Symbol search error for '{query}': {e}")
@@ -34,10 +39,13 @@ def search_symbol(query: str) -> list[dict]:
 def get_live_quote(symbol: str) -> dict:
     """Get real-time price for a single stock."""
     try:
+        cached = cache_get("quote", symbol)
+        if cached is not None:
+            return cached
         q = fc.quote(symbol)
         if not q or q.get("c", 0) == 0:
             return {"symbol": symbol, "error": f"No data available for {symbol}"}
-        return {
+        result = {
             "symbol": symbol,
             "price": q["c"],
             "open": q["o"],
@@ -48,6 +56,8 @@ def get_live_quote(symbol: str) -> dict:
             "change_pct": round(q.get("dp", 0) or 0, 2),
             "timestamp": datetime.now().isoformat(),
         }
+        cache_set("quote", result, 15, symbol)
+        return result
     except Exception as e:
         logger.error(f"get_live_quote({symbol}): {e}")
         return {"symbol": symbol, "error": str(e)}
@@ -56,6 +66,9 @@ def get_live_quote(symbol: str) -> dict:
 def get_technical_analysis(symbol: str) -> dict:
     """Run technical indicators using historical candles."""
     try:
+        cached = cache_get("analysis", symbol)
+        if cached is not None:
+            return cached
         now = int(datetime.now().timestamp())
         start = int((datetime.now() - timedelta(days=120)).timestamp())
         candles = fc.stock_candles(symbol, "D", start, now)
@@ -113,6 +126,7 @@ def get_technical_analysis(symbol: str) -> dict:
             signals.append("Below lower Bollinger Band — oversold")
 
         result["signals"] = signals
+        cache_set("analysis", result, 60, symbol)
         return result
 
     except Exception as e:
@@ -123,6 +137,9 @@ def get_technical_analysis(symbol: str) -> dict:
 def get_news(symbol: str = None, limit: int = 10) -> list[dict]:
     """Get latest news. If symbol given, get company news. Otherwise general market news."""
     try:
+        cached = cache_get("news", symbol, limit)
+        if cached is not None:
+            return cached
         if symbol:
             today = datetime.now().strftime("%Y-%m-%d")
             week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
@@ -140,6 +157,7 @@ def get_news(symbol: str = None, limit: int = 10) -> list[dict]:
                 "datetime": datetime.fromtimestamp(a.get("datetime", 0)).isoformat(),
                 "related": a.get("related", ""),
             })
+        cache_set("news", results, 180, symbol, limit)
         return results
     except Exception as e:
         logger.error(f"get_news({symbol}): {e}")
@@ -149,6 +167,9 @@ def get_news(symbol: str = None, limit: int = 10) -> list[dict]:
 def get_news_sentiment(symbol: str) -> dict:
     """Get news for a symbol and analyze sentiment."""
     try:
+        cached = cache_get("sentiment", symbol)
+        if cached is not None:
+            return cached
         articles = get_news(symbol=symbol, limit=15)
 
         positive_words = {"surge", "jump", "gain", "rally", "rise", "bull", "beat", "record",
@@ -182,7 +203,7 @@ def get_news_sentiment(symbol: str) -> dict:
         else:
             overall = "neutral"
 
-        return {
+        result = {
             "symbol": symbol,
             "overall_sentiment": overall,
             "positive": pos_count,
@@ -190,6 +211,8 @@ def get_news_sentiment(symbol: str) -> dict:
             "neutral": neu_count,
             "articles": scored,
         }
+        cache_set("sentiment", result, 180, symbol)
+        return result
     except Exception as e:
         logger.error(f"get_news_sentiment({symbol}): {e}")
         return {"symbol": symbol, "overall_sentiment": "unknown", "error": str(e)}
@@ -198,6 +221,9 @@ def get_news_sentiment(symbol: str) -> dict:
 def get_earnings_calendar(from_date: str = None, to_date: str = None) -> dict:
     """Get upcoming and recent earnings announcements."""
     try:
+        cached = cache_get("earnings_cal", from_date, to_date)
+        if cached is not None:
+            return cached
         if not from_date:
             from_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         if not to_date:
@@ -217,7 +243,9 @@ def get_earnings_calendar(from_date: str = None, to_date: str = None) -> dict:
                 "quarter": e.get("quarter"),
                 "year": e.get("year"),
             })
-        return {"from": from_date, "to": to_date, "count": len(results), "earnings": results}
+        result = {"from": from_date, "to": to_date, "count": len(results), "earnings": results}
+        cache_set("earnings_cal", result, 1800, from_date, to_date)
+        return result
     except Exception as e:
         logger.error(f"get_earnings_calendar: {e}")
         return {"error": str(e), "earnings": []}
@@ -226,6 +254,9 @@ def get_earnings_calendar(from_date: str = None, to_date: str = None) -> dict:
 def get_earnings_surprises(symbol: str) -> dict:
     """Get historical earnings surprises — actual vs estimate for last 4 quarters."""
     try:
+        cached = cache_get("earnings", symbol)
+        if cached is not None:
+            return cached
         data = fc.company_earnings(symbol, limit=4)
         results = []
         for e in data:
@@ -249,11 +280,13 @@ def get_earnings_surprises(symbol: str) -> dict:
         total = sum(1 for r in results if r.get("beat") is not None)
         beat_rate = round((beats / total) * 100, 0) if total > 0 else None
 
-        return {
+        result = {
             "symbol": symbol,
             "beat_rate_pct": beat_rate,
             "quarters": results,
         }
+        cache_set("earnings", result, 3600, symbol)
+        return result
     except Exception as e:
         logger.error(f"get_earnings_surprises({symbol}): {e}")
         return {"symbol": symbol, "error": str(e)}
@@ -262,13 +295,16 @@ def get_earnings_surprises(symbol: str) -> dict:
 def get_recommendation_trends(symbol: str) -> dict:
     """Get analyst recommendation trends — buy/hold/sell consensus."""
     try:
+        cached = cache_get("recommend", symbol)
+        if cached is not None:
+            return cached
         data = fc.recommendation_trends(symbol)
         if not data:
             return {"symbol": symbol, "error": "No recommendation data"}
         latest = data[0] if data else {}
         total = (latest.get("buy", 0) + latest.get("hold", 0) + latest.get("sell", 0) +
                  latest.get("strongBuy", 0) + latest.get("strongSell", 0))
-        return {
+        result = {
             "symbol": symbol,
             "period": latest.get("period", ""),
             "strong_buy": latest.get("strongBuy", 0),
@@ -279,6 +315,8 @@ def get_recommendation_trends(symbol: str) -> dict:
             "total_analysts": total,
             "consensus": _calc_consensus(latest),
         }
+        cache_set("recommend", result, 1800, symbol)
+        return result
     except Exception as e:
         logger.error(f"get_recommendation_trends({symbol}): {e}")
         return {"symbol": symbol, "error": str(e)}
@@ -310,8 +348,11 @@ def _calc_consensus(rec: dict) -> str:
 def get_price_target(symbol: str) -> dict:
     """Get analyst price target consensus."""
     try:
+        cached = cache_get("price_target", symbol)
+        if cached is not None:
+            return cached
         data = fc.price_target(symbol)
-        return {
+        result = {
             "symbol": symbol,
             "target_high": data.get("targetHigh"),
             "target_low": data.get("targetLow"),
@@ -319,6 +360,8 @@ def get_price_target(symbol: str) -> dict:
             "target_median": data.get("targetMedian"),
             "last_updated": data.get("lastUpdated", ""),
         }
+        cache_set("price_target", result, 3600, symbol)
+        return result
     except Exception as e:
         logger.error(f"get_price_target({symbol}): {e}")
         return {"symbol": symbol, "error": str(e)}

@@ -42,10 +42,10 @@ Calculations (from uEquity spec):
 import json
 import logging
 import os
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import finnhub
 import config
+from cache import cache_get, cache_set
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -54,11 +54,7 @@ fc = finnhub.Client(api_key=config.FINNHUB_API_KEY)
 
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
 PORTFOLIO_FILE = os.path.join(DATA_DIR, "portfolio.json")
-NAMES_CACHE = {}
-
-# Quote cache: {symbol: {"data": {...}, "ts": timestamp}}
-QUOTE_CACHE = {}
-QUOTE_CACHE_TTL = 15  # seconds — avoid re-fetching within 15s
+NAMES_CACHE = {}  # local fallback for company names
 
 
 def _load() -> dict:
@@ -66,7 +62,7 @@ def _load() -> dict:
     if os.path.exists(PORTFOLIO_FILE):
         with open(PORTFOLIO_FILE) as f:
             return json.load(f)
-    return {"holdings": [], "watchlist": []}
+    return {"holdings": [], "watchlist": [], "transactions": []}
 
 
 def _save(data: dict):
@@ -101,13 +97,20 @@ def _get_market_session() -> str:
 
 
 def _get_company_name(symbol: str) -> str:
-    """Get company name with caching."""
+    """Get company name with Redis-backed caching (24h TTL)."""
+    # Check local in-memory cache first
     if symbol in NAMES_CACHE:
         return NAMES_CACHE[symbol]
+    # Check Redis cache
+    cached = cache_get("company_name", symbol)
+    if cached is not None:
+        NAMES_CACHE[symbol] = cached
+        return cached
     try:
         profile = fc.company_profile2(symbol=symbol)
         name = profile.get("name", "")
         NAMES_CACHE[symbol] = name
+        cache_set("company_name", name, 86400, symbol)
         return name
     except Exception:
         return ""
@@ -120,10 +123,10 @@ def _get_full_quote(symbol: str) -> dict:
     Bid/ask estimated from spread around last price for liquid stocks.
     """
     try:
-        # Check quote cache first
-        cached = QUOTE_CACHE.get(symbol)
-        if cached and (time.time() - cached["ts"]) < QUOTE_CACHE_TTL:
-            return cached["data"]
+        # Check Redis-backed quote cache first (15s TTL)
+        cached = cache_get("quote", symbol)
+        if cached is not None:
+            return cached
 
         q = fc.quote(symbol)
 
@@ -170,7 +173,7 @@ def _get_full_quote(symbol: str) -> dict:
             "high": q.get("h", 0),
             "low": q.get("l", 0),
         }
-        QUOTE_CACHE[symbol] = {"data": result, "ts": time.time()}
+        cache_set("quote", result, 15, symbol)
         return result
     except Exception as e:
         logger.error(f"_get_full_quote({symbol}): {e}")
@@ -232,8 +235,22 @@ def _get_pattern_alert(symbol: str) -> dict | None:
         return None
 
 
+def _log_transaction(data: dict, action: str, symbol: str, qty: float, price: float):
+    """Log a buy/sell transaction with timestamp."""
+    if "transactions" not in data:
+        data["transactions"] = []
+    data["transactions"].append({
+        "action": action,
+        "symbol": symbol,
+        "qty": qty,
+        "price": price,
+        "timestamp": datetime.now().isoformat(),
+    })
+
+
 def add_holding(symbol: str, qty: float, avg_price: float) -> dict:
     data = _load()
+    _log_transaction(data, "BUY", symbol, qty, avg_price)
     for h in data["holdings"]:
         if h["symbol"] == symbol:
             total_qty = h["qty"] + qty
@@ -259,6 +276,11 @@ def add_holding(symbol: str, qty: float, avg_price: float) -> dict:
 
 def remove_holding(symbol: str) -> dict:
     data = _load()
+    # Log the sell with the holding's details before removing
+    for h in data["holdings"]:
+        if h["symbol"] == symbol:
+            _log_transaction(data, "SELL", symbol, h["qty"], h["avg_price"])
+            break
     data["holdings"] = [h for h in data["holdings"] if h["symbol"] != symbol]
     _save(data)
     result = {"status": "removed", "symbol": symbol}

@@ -19,6 +19,7 @@ import auth
 import whatsapp
 import pattern_engine
 import user_data
+from cache import get_redis, cache_get, cache_set
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,6 +28,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start live price feed on server startup, stop on shutdown."""
+    # Initialize Redis cache connection
+    get_redis()
+
     # Pre-load portfolio + watchlist symbols BEFORE connecting WebSocket
     # This avoids a race where the WS connects with 0 symbols and gets dropped (code 1006)
     data = portfolio._load()
@@ -302,7 +306,12 @@ def stock_screen(criteria: str, days: int = 30, limit: int = 10, user=Depends(au
 @app.get("/api/market-summary")
 def market_summary(days: int = 30, user=Depends(auth.require_auth)):
     try:
-        return historical_data.get_market_summary(days)
+        cached = cache_get("market_summary", days)
+        if cached is not None:
+            return cached
+        result = historical_data.get_market_summary(days)
+        cache_set("market_summary", result, 120, days)
+        return result
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -427,6 +436,11 @@ def news_feed(user=Depends(auth.require_auth)):
     try:
         from datetime import datetime
 
+        # Check cache first
+        cached = cache_get("news_feed")
+        if cached is not None:
+            return cached
+
         # Get portfolio symbols
         port_data = portfolio._load()
         symbols = [h["symbol"] for h in port_data.get("holdings", [])]
@@ -502,7 +516,7 @@ def news_feed(user=Depends(auth.require_auth)):
         pos_count = sum(1 for n in all_news if n["sentiment"] == "positive")
         neg_count = sum(1 for n in all_news if n["sentiment"] == "negative")
 
-        return {
+        result = {
             "articles": all_news[:50],
             "total": len(all_news),
             "sentiment_summary": {
@@ -512,6 +526,8 @@ def news_feed(user=Depends(auth.require_auth)):
                 "overall": "bullish" if pos_count > neg_count else "bearish" if neg_count > pos_count else "neutral",
             },
         }
+        cache_set("news_feed", result, 120)
+        return result
     except Exception as e:
         logger.error(f"News feed error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
