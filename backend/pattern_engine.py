@@ -19,6 +19,19 @@ from cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_float(val, default=0.0):
+    """Convert to a JSON-safe float. Replace NaN/Inf with default."""
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        if np.isnan(f) or np.isinf(f):
+            return default
+        return f
+    except (TypeError, ValueError):
+        return default
+
 # Data directories
 DATA_DIR = Path(__file__).parent.parent / "US Market Data"
 DAILY_DIR = DATA_DIR / "daily"
@@ -695,30 +708,36 @@ def detect_breakouts(df: pd.DataFrame, lookback: int = 20) -> dict:
     consolidation = recent.head(lookback)
     latest = recent.tail(5)
 
-    cons_high = consolidation["high"].max()
-    cons_low = consolidation["low"].min()
+    cons_high = _safe_float(consolidation["high"].max())
+    cons_low = _safe_float(consolidation["low"].min())
+    if cons_low == 0:
+        return {"breakout": False}
     cons_range_pct = (cons_high - cons_low) / cons_low * 100
-    avg_vol = consolidation["volume"].mean()
+    avg_vol = _safe_float(consolidation["volume"].mean(), 1.0)
 
-    current = latest["close"].iloc[-1]
-    current_vol = latest["volume"].iloc[-1]
+    current = _safe_float(latest["close"].iloc[-1])
+    current_vol = _safe_float(latest["volume"].iloc[-1])
+
+    if current == 0:
+        return {"breakout": False}
 
     result = {
         "breakout": False,
-        "consolidation_range": {"high": round(cons_high, 2), "low": round(cons_low, 2), "range_pct": round(cons_range_pct, 2)},
+        "consolidation_range": {"high": round(cons_high, 2), "low": round(cons_low, 2),
+                                "range_pct": round(_safe_float(cons_range_pct), 2)},
         "current_price": round(current, 2),
     }
 
-    if current > cons_high:
+    if current > cons_high and cons_high > 0:
         result["breakout"] = True
         result["direction"] = "bullish"
-        result["breakout_pct"] = round((current - cons_high) / cons_high * 100, 2)
+        result["breakout_pct"] = round(_safe_float((current - cons_high) / cons_high * 100), 2)
         result["volume_confirmation"] = current_vol > avg_vol * 1.5
         result["description"] = f"Price broke above {lookback}-day range high ({cons_high:.2f})"
-    elif current < cons_low:
+    elif current < cons_low and cons_low > 0:
         result["breakout"] = True
         result["direction"] = "bearish"
-        result["breakout_pct"] = round((cons_low - current) / cons_low * 100, 2)
+        result["breakout_pct"] = round(_safe_float((cons_low - current) / cons_low * 100), 2)
         result["volume_confirmation"] = current_vol > avg_vol * 1.5
         result["description"] = f"Price broke below {lookback}-day range low ({cons_low:.2f})"
 
@@ -746,12 +765,27 @@ def detect_mean_reversion(df: pd.DataFrame) -> dict:
     deltas = pd.Series(c).diff()
     gain = deltas.where(deltas > 0, 0).rolling(14).mean().values[-1]
     loss = (-deltas.where(deltas < 0, 0)).rolling(14).mean().values[-1]
-    rsi = 100 - (100 / (1 + gain / loss)) if loss != 0 else 100
+    gain = _safe_float(gain, 0.0)
+    loss = _safe_float(loss, 0.0)
+    if loss == 0 and gain == 0:
+        rsi = 50.0  # No movement — neutral
+    elif loss == 0:
+        rsi = 100.0
+    else:
+        rsi = 100 - (100 / (1 + gain / loss))
 
     # Z-Score (how many std devs from 50-day mean)
     mean_50 = np.mean(c[-50:])
     std_50 = np.std(c[-50:])
     z_score = (current - mean_50) / std_50 if std_50 > 0 else 0
+
+    # Sanitize all computed values to avoid NaN in JSON output
+    rsi = _safe_float(rsi, 50.0)
+    bb_position = _safe_float(bb_position, 0.5)
+    upper_band = _safe_float(upper_band, current)
+    lower_band = _safe_float(lower_band, current)
+    z_score = _safe_float(z_score, 0.0)
+    mean_50 = _safe_float(mean_50, current)
 
     signals = []
     signal = "neutral"
@@ -891,26 +925,46 @@ def scan_market_patterns(limit: int = 20) -> dict:
     oversold = []
     overbought = []
 
+    scanned = 0
+    errors = 0
     for symbol in symbols:
         try:
             df = load_daily(symbol, days=252)
-            if len(df) < 50:
+            if df.empty or len(df) < 50:
                 continue
+
+            # Validate required columns exist
+            required_cols = {"open", "high", "low", "close", "volume"}
+            if not required_cols.issubset(set(df.columns)):
+                logger.warning(f"Skipping {symbol}: missing columns {required_cols - set(df.columns)}")
+                continue
+
+            # Skip stocks with NaN in critical price columns
+            if df[["open", "high", "low", "close"]].iloc[-1].isna().any():
+                logger.warning(f"Skipping {symbol}: NaN in latest price data")
+                continue
+
+            scanned += 1
 
             # Quick mean reversion check
             mr = detect_mean_reversion(df)
+            if mr.get("error"):
+                continue  # Not enough data for this analysis
             if mr.get("signal") in ("buy", "strong_buy"):
-                oversold.append({"symbol": symbol, "rsi": mr["rsi"], "z_score": mr["z_score"],
-                                 "bb_position": mr["bollinger_position"]})
+                oversold.append({"symbol": symbol, "rsi": _safe_float(mr["rsi"], 50),
+                                 "z_score": _safe_float(mr["z_score"], 0),
+                                 "bb_position": _safe_float(mr["bollinger_position"], 50)})
             elif mr.get("signal") in ("sell", "strong_sell"):
-                overbought.append({"symbol": symbol, "rsi": mr["rsi"], "z_score": mr["z_score"],
-                                   "bb_position": mr["bollinger_position"]})
+                overbought.append({"symbol": symbol, "rsi": _safe_float(mr["rsi"], 50),
+                                   "z_score": _safe_float(mr["z_score"], 0),
+                                   "bb_position": _safe_float(mr["bollinger_position"], 50)})
 
             # Breakout check
             bo = detect_breakouts(df)
             if bo.get("breakout"):
+                bp = _safe_float(bo.get("breakout_pct"), 0)
                 breakouts.append({"symbol": symbol, "direction": bo["direction"],
-                                  "breakout_pct": bo["breakout_pct"],
+                                  "breakout_pct": bp,
                                   "volume_confirmed": bo.get("volume_confirmation", False)})
 
             # Recent candlestick patterns (last 3 days only)
@@ -924,16 +978,22 @@ def scan_market_patterns(limit: int = 20) -> dict:
                     bearish.append(entry)
 
         except Exception as e:
+            errors += 1
             logger.warning(f"Scan error for {symbol}: {e}")
             continue
 
-    # Sort and limit
-    oversold.sort(key=lambda x: x["rsi"])
-    overbought.sort(key=lambda x: -x["rsi"])
-    breakouts.sort(key=lambda x: -abs(x["breakout_pct"]))
+    if errors > 0:
+        logger.info(f"Market scan completed: {scanned} scanned, {errors} errors out of {len(symbols)} symbols")
+
+    # Sort and limit (use _safe_float in sort keys to avoid NaN comparison issues)
+    oversold.sort(key=lambda x: _safe_float(x.get("rsi"), 50))
+    overbought.sort(key=lambda x: -_safe_float(x.get("rsi"), 50))
+    breakouts.sort(key=lambda x: -abs(_safe_float(x.get("breakout_pct"), 0)))
 
     return {
-        "stocks_scanned": len(symbols),
+        "stocks_scanned": scanned,
+        "stocks_available": len(symbols),
+        "stocks_errored": errors,
         "bullish_patterns": bullish[:limit],
         "bearish_patterns": bearish[:limit],
         "breakouts": breakouts[:limit],
