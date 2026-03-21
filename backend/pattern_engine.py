@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import pandas as pd
 import numpy as np
+from cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
@@ -790,6 +791,10 @@ def detect_mean_reversion(df: pd.DataFrame) -> dict:
 
 def scan_stock_patterns(symbol: str, days: int = 252) -> dict:
     """Run full pattern analysis on a single stock using 10-year daily data."""
+    cached = cache_get("patterns", symbol, days)
+    if cached is not None:
+        return cached
+
     df = load_daily(symbol, days=days)
     if df.empty:
         return {"error": f"No data found for {symbol}"}
@@ -868,6 +873,7 @@ def scan_stock_patterns(symbol: str, days: int = 252) -> dict:
         result["overall_signal"] = "MIXED"
         result["signal_detail"] = f"{signals_bullish} bullish vs {signals_bearish} bearish signals — conflicting"
 
+    cache_set("patterns", result, 300, symbol, days)
     return result
 
 
@@ -949,6 +955,10 @@ def backtest_patterns(symbol: str) -> dict:
     """Backtest pattern signals on historical data — what happened after each pattern?
     Uses full 10-year history to measure pattern reliability.
     """
+    cached = cache_get("backtest", symbol)
+    if cached is not None:
+        return cached
+
     df = load_daily(symbol)
     if len(df) < 252:
         return {"error": f"Need at least 1 year of data for {symbol}, got {len(df)} days"}
@@ -1005,13 +1015,15 @@ def backtest_patterns(symbol: str) -> dict:
     # Sort by occurrences
     summary.sort(key=lambda x: -x["occurrences"])
 
-    return {
+    result = {
         "symbol": symbol,
         "data_period": f"{dates[0]} to {dates[-1]}",
         "total_patterns": len(candles),
         "unique_patterns": len(summary),
         "pattern_performance": summary,
     }
+    cache_set("backtest", result, 3600, symbol)
+    return result
 
 
 # ─── Portfolio Analysis (scan all holdings) ───────────────────────

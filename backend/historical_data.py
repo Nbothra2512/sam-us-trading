@@ -11,6 +11,7 @@ import finnhub
 import pandas as pd
 import ta
 import config
+from cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 fc = finnhub.Client(api_key=config.FINNHUB_API_KEY)
@@ -128,6 +129,10 @@ def download_all(months: int = 6) -> dict:
 
 def get_stock_history(symbol: str, days: int = 180) -> dict:
     """Get stored historical data for a symbol with computed metrics."""
+    cached = cache_get("historical", symbol, days)
+    if cached is not None:
+        return cached
+
     conn = _get_db()
     cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     rows = conn.execute(
@@ -164,7 +169,7 @@ def get_stock_history(symbol: str, days: int = 180) -> dict:
     drawdown = ((df["close"] - cummax) / cummax) * 100
     max_drawdown = round(float(drawdown.min()), 2)
 
-    return {
+    result = {
         "symbol": symbol.upper(),
         "sector": SYMBOL_SECTOR.get(symbol.upper(), "Unknown"),
         "period": f"{df['date'].iloc[0]} to {df['date'].iloc[-1]}",
@@ -179,6 +184,8 @@ def get_stock_history(symbol: str, days: int = 180) -> dict:
         "max_drawdown_pct": max_drawdown,
         "monthly_returns": monthly_returns,
     }
+    cache_set("historical", result, 600, symbol, days)
+    return result
 
 
 def compare_stocks(symbols: list[str], days: int = 180) -> dict:
@@ -576,6 +583,10 @@ def analyze_earnings_pattern(symbol: str, quarters: int = 4) -> dict:
 
 def get_download_status() -> dict:
     """Check what data we have stored."""
+    cached = cache_get("hist_status")
+    if cached is not None:
+        return cached
+
     conn = _get_db()
     rows = conn.execute("SELECT symbol, last_download, rows_count FROM download_log ORDER BY symbol").fetchall()
     total_candles = conn.execute("SELECT COUNT(*) FROM candles").fetchone()[0]
@@ -583,10 +594,12 @@ def get_download_status() -> dict:
     date_range = conn.execute("SELECT MIN(date), MAX(date) FROM candles").fetchone()
     conn.close()
 
-    return {
+    result = {
         "symbols_stored": symbols_stored,
         "total_candles": total_candles,
         "date_range": {"from": date_range[0], "to": date_range[1]} if date_range[0] else None,
         "universe_size": len(ALL_SYMBOLS),
         "downloads": [{"symbol": r[0], "last_download": r[1], "rows": r[2]} for r in rows],
     }
+    cache_set("hist_status", result, 120)
+    return result

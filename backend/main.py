@@ -320,7 +320,12 @@ def market_summary(days: int = 30, user=Depends(auth.require_auth)):
 def earnings_pattern(symbol: str, quarters: int = 4, user=Depends(auth.require_auth)):
     """Analyze historical price behavior around past earnings announcements."""
     try:
-        return historical_data.analyze_earnings_pattern(symbol.upper(), quarters)
+        cached = cache_get("earnings_pattern", symbol.upper(), quarters)
+        if cached is not None:
+            return cached
+        result = historical_data.analyze_earnings_pattern(symbol.upper(), quarters)
+        cache_set("earnings_pattern", result, 600, symbol.upper(), quarters)
+        return result
     except Exception as e:
         logger.error(f"Earnings pattern error for {symbol}: {e}")
         return JSONResponse(status_code=500, content={"error": f"Failed to analyze earnings pattern for {symbol}"})
@@ -333,10 +338,15 @@ def earnings_pattern(symbol: str, quarters: int = 4, user=Depends(auth.require_a
 def portfolio_patterns(user=Depends(auth.require_auth)):
     """Run pattern analysis on all portfolio holdings."""
     try:
+        cached = cache_get("portfolio_patterns")
+        if cached is not None:
+            return cached
         import portfolio as port
         data = port._load()
         symbols = [h["symbol"] for h in data.get("holdings", [])]
-        return pattern_engine.analyze_portfolio_patterns(symbols)
+        result = pattern_engine.analyze_portfolio_patterns(symbols)
+        cache_set("portfolio_patterns", result, 300)
+        return result
     except Exception as e:
         logger.error(f"Portfolio pattern analysis error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -346,7 +356,12 @@ def portfolio_patterns(user=Depends(auth.require_auth)):
 def market_patterns(limit: int = 20, user=Depends(auth.require_auth)):
     """Scan all S&P 500 stocks for active patterns."""
     try:
-        return pattern_engine.scan_market_patterns(limit)
+        cached = cache_get("market_scan", limit)
+        if cached is not None:
+            return cached
+        result = pattern_engine.scan_market_patterns(limit)
+        cache_set("market_scan", result, 600, limit)
+        return result
     except Exception as e:
         logger.error(f"Market pattern scan error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -356,7 +371,12 @@ def market_patterns(limit: int = 20, user=Depends(auth.require_auth)):
 def backtest(symbol: str, user=Depends(auth.require_auth)):
     """Backtest pattern reliability for a stock using 10-year history."""
     try:
-        return pattern_engine.backtest_patterns(symbol.upper())
+        cached = cache_get("backtest", symbol.upper())
+        if cached is not None:
+            return cached
+        result = pattern_engine.backtest_patterns(symbol.upper())
+        cache_set("backtest", result, 3600, symbol.upper())
+        return result
     except Exception as e:
         logger.error(f"Backtest error for {symbol}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -366,7 +386,12 @@ def backtest(symbol: str, user=Depends(auth.require_auth)):
 def stock_patterns(symbol: str, days: int = 252, user=Depends(auth.require_auth)):
     """Full pattern recognition scan for a single stock."""
     try:
-        return pattern_engine.scan_stock_patterns(symbol.upper(), days)
+        cached = cache_get("patterns", symbol.upper(), days)
+        if cached is not None:
+            return cached
+        result = pattern_engine.scan_stock_patterns(symbol.upper(), days)
+        cache_set("patterns", result, 300, symbol.upper(), days)
+        return result
     except Exception as e:
         logger.error(f"Pattern scan error for {symbol}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -538,6 +563,11 @@ def news_feed(user=Depends(auth.require_auth)):
 def portfolio_pdf(user=Depends(auth.require_auth)):
     """Generate downloadable PDF portfolio analysis report."""
     try:
+        cached = cache_get("pdf_report")
+        if cached is not None:
+            return Response(content=bytes.fromhex(cached["hex"]), media_type="application/pdf",
+                            headers={"Content-Disposition": "attachment; filename=sam-portfolio-report.pdf"})
+
         from io import BytesIO
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import letter
@@ -663,7 +693,9 @@ def portfolio_pdf(user=Depends(auth.require_auth)):
                         "AlertItem", parent=style, fontSize=9, leftIndent=10, spaceBefore=2)))
 
         doc.build(elements)
-        return Response(content=buf.getvalue(), media_type="application/pdf",
+        pdf_bytes = buf.getvalue()
+        cache_set("pdf_report", {"hex": pdf_bytes.hex()}, 120)
+        return Response(content=pdf_bytes, media_type="application/pdf",
                         headers={"Content-Disposition": "attachment; filename=sam-portfolio-report.pdf"})
 
     except ImportError:
