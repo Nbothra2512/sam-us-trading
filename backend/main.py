@@ -2,6 +2,7 @@
 # SAM (Smart Analyst for Markets) — Proprietary Software
 
 """FastAPI server — WebSocket chat + REST endpoints + real-time price streaming."""
+import asyncio
 import json
 import logging
 import os
@@ -57,7 +58,32 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Auto-download failed: {e}")
 
+    # Start daily auto-refresh background task (runs at 6:30 AM UTC = 12:00 PM IST)
+    async def _daily_refresh():
+        while True:
+            try:
+                from datetime import datetime, timedelta
+                now = datetime.utcnow()
+                # Next run at 06:30 UTC (12:00 PM IST)
+                target = now.replace(hour=6, minute=30, second=0, microsecond=0)
+                if target <= now:
+                    target += timedelta(days=1)
+                wait_secs = (target - now).total_seconds()
+                logger.info(f"Historical data auto-refresh scheduled in {wait_secs/3600:.1f}h ({target.strftime('%H:%M UTC')})")
+                await asyncio.sleep(wait_secs)
+                logger.info("Auto-refreshing historical data...")
+                result = await asyncio.to_thread(historical_data.download_all, 6)
+                logger.info(f"Auto-refresh done: {result.get('success', 0)}/{result.get('total_symbols', 0)} stocks updated")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Auto-refresh error: {e}")
+                await asyncio.sleep(3600)  # retry in 1 hour on failure
+
+    refresh_task = asyncio.create_task(_daily_refresh())
+
     yield
+    refresh_task.cancel()
     await live_feed.stop()
 
 
